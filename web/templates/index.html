@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Recipe Generator - Multi-Agent Cooking Assistant</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🤖 AI Recipe Generator</h1>
+            <p>Multi-agent cooking assistant that creates, enhances, and analyzes recipes using advanced AI</p>
+        </header>
+        
+        <div class="recipe-generator">
+            <div class="input-group">
+                <label for="recipeInput">What would you like to cook?</label>
+                <input type="text" id="recipeInput" class="recipe-input" 
+                       placeholder="e.g., 'spicy chicken tacos', 'healthy pasta dish', 'chocolate dessert for date night'" 
+                       maxlength="200">
+            </div>
+            
+            <button id="generateBtn" class="generate-btn">
+                🚀 Generate Recipe with AI Agents
+            </button>
+            
+            <div id="loading" class="loading">
+                <div class="loading-spinner"></div>
+                <h3>AI agents are working on your recipe...</h3>
+                <p>This may take 30-60 seconds</p>
+                <div id="progressLog" class="progress-log"></div>
+            </div>
+            
+            <div id="errorMessage" class="error-message"></div>
+        </div>
+        
+        <div id="recipeResult" class="recipe-result">
+            <!-- Recipe content will be dynamically inserted here -->
+        </div>
+        
+        <div class="recent-recipes">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>🔥 Recipe Collection</h2>
+                <button id="toggleFilters" class="filter-toggle-btn">🔍 Filters</button>
+            </div>
+            
+            <div id="filterPanel" class="filter-panel" style="display: none;">
+                <div class="filter-grid">
+                    <div class="filter-group">
+                        <label for="searchInput">Search Recipes:</label>
+                        <input type="text" id="searchInput" placeholder="Search by name or description..." class="filter-input">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="mealTypeFilter">Meal Type:</label>
+                        <select id="mealTypeFilter" class="filter-select">
+                            <option value="all">All Meals</option>
+                            <option value="breakfast">Breakfast</option>
+                            <option value="lunch">Lunch</option>
+                            <option value="dinner">Dinner</option>
+                            <option value="snack">Snack</option>
+                            <option value="dessert">Dessert</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="difficultyFilter">Difficulty:</label>
+                        <select id="difficultyFilter" class="filter-select">
+                            <option value="all">All Levels</option>
+                            <option value="Easy">Easy</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Hard">Hard</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="qualityFilter">Min Quality Score:</label>
+                        <select id="qualityFilter" class="filter-select">
+                            <option value="0">Any Quality</option>
+                            <option value="6">6+ Stars</option>
+                            <option value="7">7+ Stars</option>
+                            <option value="8">8+ Stars</option>
+                            <option value="9">9+ Stars</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="filter-actions">
+                    <button id="applyFilters" class="apply-filters-btn">Apply Filters</button>
+                    <button id="clearFilters" class="clear-filters-btn">Clear All</button>
+                </div>
+            </div>
+            
+            <div id="recentRecipesList">
+                <p>Loading recipes...</p>
+            </div>
+        </div>
+        
+        <!-- Recipe Detail Modal -->
+        <div id="recipeModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modalRecipeTitle">Recipe Details</h2>
+                    <div class="modal-actions">
+                        <button id="printRecipeBtn" class="print-btn">🖨️ Print</button>
+                        <button id="closeModal" class="close-btn">✕</button>
+                    </div>
+                </div>
+                <div id="modalRecipeContent" class="modal-body">
+                    <!-- Recipe content will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
