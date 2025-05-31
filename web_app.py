@@ -53,7 +53,6 @@ def generate_recipe():
             return jsonify({'error': 'Recipe request is required'}), 400
 
         print(f"🌐 Received request: {user_request}")
-        print("🔑 ANTHROPIC_API_KEY =", os.getenv("ANTHROPIC_API_KEY"))
 
         start_time = time.time()
         result = recipe_team.generate_recipe(user_request)

@@ -9,6 +9,7 @@ class RecipeGenerator:
     def __init__(self):
         self.client = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
         self.model = "claude-sonnet-4-20250514"
+        print("initiating RecipeGenerator with key: ", self.client.api_key)
     
     def create_recipe(self, user_request: str) -> Dict:
         """
