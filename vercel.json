@@ -1,5 +1,4 @@
 {
-  "version": 2,
   "builds": [
     {
       "src": "web_app.py",
@@ -11,10 +10,5 @@
       "src": "/(.*)",
       "dest": "web_app.py"
     }
-  ],
-  "functions": {
-    "web_app.py": {
-      "maxDuration": 60
-    }
-  }
+  ]
 }
