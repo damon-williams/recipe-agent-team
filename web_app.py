@@ -1,6 +1,6 @@
-# web_app.py - Full-featured version for Vercel
+# web_app.py - Recipe Agent Team Flask Application
 import os
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -12,7 +12,7 @@ import traceback
 
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='web/static', template_folder='web/templates')
 CORS(app)
 
 # Initialize Supabase
@@ -23,7 +23,7 @@ supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and
 # Initialize Recipe Agent Team
 recipe_team = RecipeAgentTeam()
 
-# Embed the HTML template directly to avoid file path issues
+# Embed the HTML template directly
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html lang="en">
@@ -31,62 +31,7 @@ HTML_TEMPLATE = '''
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Recipe Generator - Multi-Agent Cooking Assistant</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh; color: #333;
-        }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .header { text-align: center; color: white; margin-bottom: 40px; }
-        .header h1 { font-size: 3rem; font-weight: 700; margin-bottom: 10px; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
-        .header p { font-size: 1.2rem; opacity: 0.9; max-width: 600px; margin: 0 auto; }
-        .recipe-generator { background: white; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); padding: 40px; margin-bottom: 40px; }
-        .input-group { margin-bottom: 20px; }
-        .input-group label { display: block; font-weight: 600; margin-bottom: 8px; color: #555; }
-        .recipe-input { width: 100%; padding: 15px 20px; border: 2px solid #e1e5e9; border-radius: 12px; font-size: 1rem; transition: all 0.3s ease; }
-        .recipe-input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
-        .generate-btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 15px 30px; border-radius: 12px; font-size: 1.1rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; width: 100%; }
-        .generate-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3); }
-        .generate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .loading { display: none; text-align: center; padding: 40px; }
-        .loading-spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .progress-log { background: #f8f9fa; border-radius: 12px; padding: 20px; margin-top: 20px; max-height: 200px; overflow-y: auto; }
-        .progress-item { padding: 8px 0; border-bottom: 1px solid #eee; }
-        .progress-item:last-child { border-bottom: none; }
-        .progress-item.completed { color: #28a745; font-weight: 500; }
-        .progress-item.in-progress { color: #007bff; font-weight: 500; }
-        .recipe-result { display: none; background: white; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); padding: 40px; margin-bottom: 40px; }
-        .recipe-title { font-size: 2.5rem; font-weight: 700; color: #333; margin-bottom: 10px; text-align: center; }
-        .recipe-meta { display: flex; justify-content: center; gap: 20px; margin: 20px 0; flex-wrap: wrap; }
-        .meta-item { background: #f8f9fa; padding: 8px 16px; border-radius: 20px; font-weight: 500; color: #666; }
-        .quality-score { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 8px 16px; border-radius: 20px; font-weight: 600; }
-        .section-title { font-size: 1.5rem; font-weight: 600; color: #333; margin: 20px 0 15px 0; }
-        .ingredients-list { background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
-        .ingredients-list li { margin-bottom: 8px; padding: 8px; background: white; border-radius: 6px; border-left: 4px solid #667eea; }
-        .instructions-list { counter-reset: step-counter; }
-        .instruction-item { background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 12px; counter-increment: step-counter; position: relative; padding-left: 60px; line-height: 1.6; }
-        .instruction-item::before { content: counter(step-counter); position: absolute; left: 20px; top: 20px; background: #667eea; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9rem; }
-        .nutrition-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 20px 0; }
-        .nutrition-card { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }
-        .nutrition-value { font-size: 1.5rem; font-weight: 700; color: #667eea; }
-        .nutrition-label { color: #666; font-weight: 500; margin-top: 5px; font-size: 0.9rem; }
-        .tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
-        .tag { background: #667eea; color: white; padding: 6px 12px; border-radius: 16px; font-size: 0.9rem; font-weight: 500; }
-        .enhancement-list { background: #e8f5e8; padding: 20px; border-radius: 12px; border-left: 4px solid #28a745; margin: 20px 0; }
-        .enhancement-list ul { margin: 0; padding-left: 20px; }
-        .enhancement-list li { margin-bottom: 8px; color: #155724; }
-        .error-message { background: #f8d7da; color: #721c24; padding: 15px 20px; border-radius: 8px; margin-top: 20px; display: none; }
-        .generation-stats { background: #f8f9fa; border-radius: 12px; padding: 20px; text-align: center; margin-top: 30px; color: #666; }
-        @media (max-width: 768px) {
-            .header h1 { font-size: 2rem; }
-            .recipe-generator, .recipe-result { padding: 20px; }
-            .nutrition-grid { grid-template-columns: repeat(2, 1fr); }
-            .recipe-title { font-size: 2rem; }
-        }
-    </style>
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
     <div class="container">
@@ -122,163 +67,10 @@ HTML_TEMPLATE = '''
         </div>
     </div>
 
-    <script>
-        document.getElementById('generateBtn').addEventListener('click', generateRecipe);
-        document.getElementById('recipeInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') generateRecipe();
-        });
-
-        function showLoading() {
-            document.getElementById('generateBtn').disabled = true;
-            document.getElementById('generateBtn').textContent = 'Generating...';
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('recipeResult').style.display = 'none';
-            simulateProgress();
-        }
-
-        function hideLoading() {
-            document.getElementById('generateBtn').disabled = false;
-            document.getElementById('generateBtn').textContent = '🚀 Generate Recipe with AI Agents';
-            document.getElementById('loading').style.display = 'none';
-        }
-
-        function simulateProgress() {
-            const steps = [
-                '🤖 Recipe Generator: Creating base recipe...',
-                '🔍 Web Researcher: Finding cooking inspiration...',
-                '📝 Recipe Enhancer: Adding creative improvements...',
-                '🥗 Nutrition Analyst: Calculating health metrics...',
-                '⭐ Quality Evaluator: Scoring recipe quality...'
-            ];
-            
-            let currentStep = 0;
-            const progressLog = document.getElementById('progressLog');
-            progressLog.innerHTML = '';
-            
-            const interval = setInterval(() => {
-                if (currentStep < steps.length) {
-                    const progressItem = document.createElement('div');
-                    progressItem.className = 'progress-item in-progress';
-                    progressItem.textContent = steps[currentStep];
-                    progressLog.appendChild(progressItem);
-                    
-                    if (currentStep > 0) {
-                        const prevItem = progressLog.children[currentStep - 1];
-                        prevItem.className = 'progress-item completed';
-                        prevItem.textContent += ' ✓';
-                    }
-                    
-                    currentStep++;
-                    progressLog.scrollTop = progressLog.scrollHeight;
-                } else {
-                    clearInterval(interval);
-                    if (progressLog.children.length > 0) {
-                        const lastItem = progressLog.children[progressLog.children.length - 1];
-                        lastItem.className = 'progress-item completed';
-                        lastItem.textContent += ' ✓';
-                    }
-                }
-            }, 2500);
-        }
-
-        async function generateRecipe() {
-            const request = document.getElementById('recipeInput').value.trim();
-            if (!request) {
-                showError('Please enter a recipe request');
-                return;
-            }
-            
-            showLoading();
-            hideError();
-            
-            try {
-                const response = await fetch('/api/generate-recipe', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ recipe_request: request })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    displayRecipe(data);
-                } else {
-                    showError(data.error || 'Recipe generation failed');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showError('Network error. Please try again.');
-            } finally {
-                hideLoading();
-            }
-        }
-
-        function displayRecipe(data) {
-            const recipe = data.recipe;
-            const nutrition = data.nutrition;
-            const quality = data.quality;
-            
-            const nutritionHtml = nutrition && nutrition.nutrition_per_serving ? `
-                <h2 class="section-title">📊 Nutrition (per serving)</h2>
-                <div class="nutrition-grid">
-                    <div class="nutrition-card">
-                        <div class="nutrition-value">${nutrition.nutrition_per_serving.calories || 'N/A'}</div>
-                        <div class="nutrition-label">Calories</div>
-                    </div>
-                    <div class="nutrition-card">
-                        <div class="nutrition-value">${nutrition.nutrition_per_serving.protein || 'N/A'}g</div>
-                        <div class="nutrition-label">Protein</div>
-                    </div>
-                    <div class="nutrition-card">
-                        <div class="nutrition-value">${nutrition.nutrition_per_serving.carbs || 'N/A'}g</div>
-                        <div class="nutrition-label">Carbs</div>
-                    </div>
-                    <div class="nutrition-card">
-                        <div class="nutrition-value">${nutrition.nutrition_per_serving.fat || 'N/A'}g</div>
-                        <div class="nutrition-label">Fat</div>
-                    </div>
-                </div>
-            ` : '';
-
-            const enhancementsHtml = recipe.enhancements_made && recipe.enhancements_made.length > 0 ? `
-                <h2 class="section-title">✨ AI Enhancements</h2>
-                <div class="enhancement-list">
-                    <ul>
-                        ${recipe.enhancements_made.map(enhancement => `<li>${enhancement}</li>`).join('')}
-                    </ul>
-                </div>
-            ` : '';
-            
-            const html = `
-                <h1 class="recipe-title">${recipe.title}</h1>
-                <p style="text-align: center; font-size: 1.1rem; color: #666; margin-bottom: 20px;">${recipe.description || ''}</p>
-                
-                <div class="recipe-meta">
-                    <span class="meta-item">⏱️ Prep: ${recipe.prep_time}</span>
-                    <span class="meta-item">🔥 Cook: ${recipe.cook_time}</span>
-                    <span class="meta-item">👥 Serves: ${recipe.servings}</span>
-                    <span class="meta-item">📊 ${recipe.difficulty}</span>
-                    <span class="quality-score">⭐ ${quality?.score || 'N/A'}/10</span>
-                </div>
-                
-                <h2 class="section-title">🥘 Ingredients</h2>
-                <div class="ingredients-list">
-                    <ul>
-                        ${recipe.ingredients.map(ingredient => `<li>${ingredient}</li>`).join('')}
-                    </ul>
-                </div>
-                
-                <h2 class="section-title">👨‍🍳 Instructions</h2>
-                <div class="instructions-list">
-                    ${recipe.instructions.map(instruction => `<div class="instruction-item">${instruction}</div>`).join('')}
-                </div>
-                
-                ${nutritionHtml}
-                ${enhancementsHtml}
-                
-                <div class="tags">
-                    ${recipe.tags ? recipe.tags.map(tag => `<span class="tag">${tag}</span>`).join('') : ''}
-                    ${nutrition?.dietary_tags ? nutrition.dietary_tags.map(tag => `<span class="tag">${tag}</span>`).join('') : ''}
+    <script src="/static/script.js"></script>
+</body>
+</html>
+'''
                 </div>
                 
                 <div class="generation-stats">
@@ -310,6 +102,11 @@ HTML_TEMPLATE = '''
 def index():
     """Serve the main recipe generator page"""
     return render_template_string(HTML_TEMPLATE)
+
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    """Serve static files (CSS, JS, etc.)"""
+    return app.send_static_file(filename)
 
 @app.route('/api/generate-recipe', methods=['POST'])
 def generate_recipe():
@@ -475,22 +272,16 @@ def not_found(error):
 def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
-# For Vercel deployment
 if __name__ == '__main__':
-    # Check required environment variables
-    required_vars = ['ANTHROPIC_API_KEY']
-    missing_vars = [var for var in required_vars if not os.getenv(var)]
-    
-    if missing_vars:
-        print(f"❌ Missing environment variables: {', '.join(missing_vars)}")
-        print("Please add them to your Vercel environment variables")
-        exit(1)
+    # Railway deployment configuration
+    port = int(os.environ.get('PORT', 8000))
     
     print("🚀 Starting Recipe Agent Team Web App...")
-    print("📡 API endpoints available")
-    print("🌐 Full multi-agent system enabled")
+    print(f"📡 Server starting on port {port}")
+    print(f"🤖 Agent system: {'Full multi-agent' if FULL_AGENTS_AVAILABLE else 'Claude-only fallback'}")
+    print(f"🗄️ Database: {'Connected' if supabase else 'Not configured'}")
     
-    app.run(debug=True, port=5001)# web_app.py - Lightweight version for Vercel deployment
+    app.run(host='0.0.0.0', port=port, debug=False)# web_app.py - Lightweight version for Vercel deployment
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -502,13 +293,194 @@ import traceback
 import httpx
 import requests
 
-# Import agents - make sure they're in the same directory
+# web_app.py - Recipe Agent Team Flask Application
+import os
+import sys
+from flask import Flask, request, jsonify, render_template_string
+from flask_cors import CORS
+from dotenv import load_dotenv
+from supabase import create_client, Client
+import json
+from datetime import datetime
+import time
+import traceback
+
+# Add agents folder to Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'agents'))
+
+load_dotenv()
+
+app = Flask(__name__)
+CORS(app)
+
+# Initialize Supabase
+supabase_url = os.getenv('SUPABASE_URL')
+supabase_key = os.getenv('SUPABASE_ANON_KEY')
+supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+
+# Import agents with error handling
 try:
     from main import RecipeAgentTeam
-except ImportError:
-    # Lightweight fallback agents
-    from recipe_generator import RecipeGenerator
-    print("⚠️ Using lightweight agent setup for Vercel")
+    FULL_AGENTS_AVAILABLE = True
+    print("✅ Full agent system loaded from main.py")
+except ImportError as e:
+    print(f"⚠️ Could not import main RecipeAgentTeam: {e}")
+    print("⚠️ Trying to import individual agents from agents/ folder...")
+    
+    try:
+        from recipe_generator import RecipeGenerator
+        from recipe_enhancer import RecipeEnhancer
+        from web_researcher import WebResearcher
+        from nutrition_analyst import NutritionAnalyst
+        from quality_evaluator import QualityEvaluator
+        
+        print("✅ Individual agents imported successfully")
+        FULL_AGENTS_AVAILABLE = True
+        
+        # Create a simple orchestrator
+        class SimpleRecipeTeam:
+            def __init__(self):
+                self.generator = RecipeGenerator()
+                self.enhancer = RecipeEnhancer()
+                self.researcher = WebResearcher()
+                self.nutrition = NutritionAnalyst()
+                self.evaluator = QualityEvaluator()
+                print("🤖 Simple agent team initialized")
+            
+            def generate_recipe(self, user_request):
+                try:
+                    print(f"🎯 Generating recipe for: {user_request}")
+                    process_log = []
+                    
+                    # Step 1: Generate base recipe
+                    process_log.append("🤖 Recipe Generator: Creating base recipe...")
+                    base_recipe = self.generator.create_recipe(user_request)
+                    
+                    if not base_recipe.get('success'):
+                        return {
+                            'success': False, 
+                            'error': base_recipe.get('error'),
+                            'process_log': process_log
+                        }
+                    
+                    process_log.append(f"✅ Generated: {base_recipe.get('title')}")
+                    
+                    # Step 2: Research inspiration (optional)
+                    inspiration_data = None
+                    try:
+                        process_log.append("🔍 Web Researcher: Finding cooking inspiration...")
+                        inspiration_data = self.researcher.find_inspiration(
+                            base_recipe.get('title', ''), 
+                            base_recipe.get('meal_type')
+                        )
+                        process_log.append("✅ Research completed")
+                    except Exception as e:
+                        print(f"⚠️ Research failed: {e}")
+                        process_log.append("⚠️ Research failed - using base recipe")
+                    
+                    # Step 3: Enhance recipe
+                    enhanced_recipe = base_recipe
+                    try:
+                        process_log.append("📝 Recipe Enhancer: Adding improvements...")
+                        enhanced_recipe = self.enhancer.enhance_recipe(base_recipe, inspiration_data)
+                        
+                        enhancements = enhanced_recipe.get('enhancements_made', [])
+                        if enhancements:
+                            process_log.append(f"✅ Applied {len(enhancements)} enhancements")
+                        else:
+                            process_log.append("✅ Recipe enhanced")
+                    except Exception as e:
+                        print(f"⚠️ Enhancement failed: {e}")
+                        process_log.append("⚠️ Enhancement failed - using base recipe")
+                        enhanced_recipe = base_recipe
+                    
+                    # Step 4: Analyze nutrition
+                    nutrition_data = None
+                    try:
+                        process_log.append("🥗 Nutrition Analyst: Calculating health metrics...")
+                        nutrition_data = self.nutrition.analyze_nutrition(enhanced_recipe)
+                        
+                        if nutrition_data and nutrition_data.get('nutrition_per_serving'):
+                            calories = nutrition_data['nutrition_per_serving'].get('calories', 'N/A')
+                            process_log.append(f"✅ Nutrition: ~{calories} calories/serving")
+                        else:
+                            process_log.append("✅ Basic nutrition estimates provided")
+                    except Exception as e:
+                        print(f"⚠️ Nutrition analysis failed: {e}")
+                        process_log.append("⚠️ Nutrition analysis failed")
+                        nutrition_data = self._create_fallback_nutrition(enhanced_recipe)
+                    
+                    # Step 5: Evaluate quality
+                    quality_data = None
+                    try:
+                        process_log.append("⭐ Quality Evaluator: Scoring recipe quality...")
+                        quality_data = self.evaluator.evaluate_recipe(
+                            enhanced_recipe, nutrition_data, inspiration_data
+                        )
+                        
+                        score = quality_data.get('score', 0)
+                        quality_level = quality_data.get('quality_level', 'Unknown')
+                        process_log.append(f"✅ Quality Score: {score}/10 ({quality_level})")
+                    except Exception as e:
+                        print(f"⚠️ Quality evaluation failed: {e}")
+                        process_log.append("⚠️ Quality evaluation failed")
+                        quality_data = self._create_fallback_quality()
+                    
+                    process_log.append("🎉 Recipe generation complete!")
+                    
+                    return {
+                        'success': True,
+                        'recipe': enhanced_recipe,
+                        'nutrition': nutrition_data,
+                        'quality': quality_data,
+                        'iterations': 1,
+                        'process_log': process_log
+                    }
+                    
+                except Exception as e:
+                    error_msg = f"Recipe generation failed: {str(e)}"
+                    print(f"❌ {error_msg}")
+                    return {
+                        'success': False,
+                        'error': error_msg,
+                        'process_log': process_log + [f"❌ {error_msg}"]
+                    }
+            
+            def _create_fallback_nutrition(self, recipe):
+                """Create basic nutrition estimates"""
+                meal_type = recipe.get('meal_type', 'dinner').lower()
+                base_estimates = {
+                    'breakfast': {'calories': 350, 'protein': 15, 'carbs': 45, 'fat': 12},
+                    'lunch': {'calories': 450, 'protein': 20, 'carbs': 50, 'fat': 15},
+                    'dinner': {'calories': 550, 'protein': 25, 'carbs': 55, 'fat': 18},
+                    'snack': {'calories': 200, 'protein': 8, 'carbs': 25, 'fat': 8},
+                    'dessert': {'calories': 300, 'protein': 5, 'carbs': 45, 'fat': 12}
+                }
+                
+                estimate = base_estimates.get(meal_type, base_estimates['dinner']).copy()
+                estimate.update({'fiber': 4, 'sugar': 8, 'sodium': 400})
+                
+                return {
+                    'nutrition_per_serving': estimate,
+                    'health_insights': ["Nutrition estimates provided"],
+                    'analysis_method': 'fallback_estimate',
+                    'confidence': 'low'
+                }
+            
+            def _create_fallback_quality(self):
+                """Create basic quality score"""
+                return {
+                    'score': 7.0,
+                    'quality_verdict': 'good',
+                    'quality_level': 'Good',
+                    'confidence': 'medium',
+                    'recommendations': ['Quality evaluation used default scoring'],
+                    'meets_threshold': True
+                }
+        
+    except ImportError as e2:
+        print(f"❌ Could not import individual agents: {e2}")
+        FULL_AGENTS_AVAILABLE = False
 
 load_dotenv()
 
@@ -549,44 +521,149 @@ def supabase_insert(table, data):
         return None
 
 # Initialize Recipe Agent Team
-try:
-    recipe_team = RecipeAgentTeam()
-except:
-    # Lightweight fallback - just use the recipe generator
-    class MinimalRecipeTeam:
+if FULL_AGENTS_AVAILABLE:
+    try:
+        if 'RecipeAgentTeam' in globals():
+            # Use the main orchestrator if available
+            recipe_team = RecipeAgentTeam()
+            print("🤖 Full Recipe Agent Team initialized")
+        else:
+            # Use the simple orchestrator with individual agents
+            recipe_team = SimpleRecipeTeam()
+            print("🤖 Simple Recipe Team initialized")
+    except Exception as e:
+        print(f"⚠️ Failed to initialize agent team: {e}")
+        FULL_AGENTS_AVAILABLE = False
+
+if not FULL_AGENTS_AVAILABLE:
+    # Ultimate fallback - Claude-only recipe generation
+    print("🔄 Initializing Claude-only fallback system...")
+    
+    class FallbackRecipeTeam:
         def __init__(self):
-            self.generator = RecipeGenerator()
-        
+            print("🔄 Initializing fallback recipe system...")
+            
         def generate_recipe(self, user_request):
+            """Fallback recipe generation using only Claude API"""
             try:
-                print(f"🤖 Generating recipe for: {user_request}")
+                from anthropic import Anthropic
                 
-                # Simple generation without heavy agents
-                base_recipe = self.generator.create_recipe(user_request)
-                if not base_recipe.get('success'):
-                    return {'success': False, 'error': base_recipe.get('error')}
+                client = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
                 
-                # Add basic quality score
-                base_recipe['quality_score'] = 7.5
-                base_recipe['quality_level'] = 'Good'
+                prompt = f"""Create a detailed recipe for: {user_request}
+
+Return a complete recipe with this exact structure:
+
+Title: [Recipe Name]
+Description: [Brief description]
+Prep Time: [X minutes]
+Cook Time: [X minutes]
+Servings: [X]
+Difficulty: [Easy/Medium/Hard]
+
+Ingredients:
+- [ingredient 1 with measurements]
+- [ingredient 2 with measurements]
+- [etc...]
+
+Instructions:
+1. [Step 1]
+2. [Step 2]
+3. [etc...]
+
+Tags: [tag1, tag2, tag3]
+Cuisine: [cuisine type]
+Meal Type: [breakfast/lunch/dinner/snack/dessert]"""
+
+                response = client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=2000,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                
+                recipe_text = response.content[0].text.strip()
+                
+                # Parse the response into structured data
+                recipe_data = self._parse_recipe_text(recipe_text, user_request)
                 
                 return {
                     'success': True,
-                    'recipe': base_recipe,
-                    'nutrition': {'nutrition_per_serving': {'calories': 'Estimated', 'protein': 'N/A'}},
-                    'quality': {'score': 7.5, 'quality_level': 'Good', 'confidence': 'medium'},
+                    'recipe': recipe_data,
+                    'nutrition': {
+                        'nutrition_per_serving': {
+                            'calories': 'Estimated',
+                            'protein': 'N/A',
+                            'carbs': 'N/A',
+                            'fat': 'N/A'
+                        },
+                        'health_insights': ['Basic recipe generated - nutrition analysis unavailable']
+                    },
+                    'quality': {
+                        'score': 7.0,
+                        'quality_level': 'Good',
+                        'confidence': 'medium'
+                    },
                     'iterations': 1,
-                    'process_log': ['Recipe generated successfully (lightweight mode)']
+                    'process_log': ['Recipe generated using fallback system']
                 }
                 
             except Exception as e:
                 return {
                     'success': False,
-                    'error': f"Recipe generation failed: {str(e)}",
+                    'error': f"Fallback recipe generation failed: {str(e)}",
                     'process_log': [f"Error: {str(e)}"]
                 }
+        
+        def _parse_recipe_text(self, text, original_request):
+            """Parse the Claude response into structured recipe data"""
+            import re
+            
+            # Extract sections using regex
+            title_match = re.search(r'Title:\s*(.+)', text)
+            desc_match = re.search(r'Description:\s*(.+)', text)
+            prep_match = re.search(r'Prep Time:\s*(.+)', text)
+            cook_match = re.search(r'Cook Time:\s*(.+)', text)
+            servings_match = re.search(r'Servings:\s*(.+)', text)
+            difficulty_match = re.search(r'Difficulty:\s*(.+)', text)
+            
+            # Extract ingredients (lines starting with -)
+            ingredients = re.findall(r'^\s*-\s*(.+)', text, re.MULTILINE)
+            
+            # Extract instructions (numbered lines)
+            instructions = re.findall(r'^\s*\d+\.\s*(.+)', text, re.MULTILINE)
+            
+            # Extract tags
+            tags_match = re.search(r'Tags:\s*(.+)', text)
+            tags = []
+            if tags_match:
+                tags = [tag.strip() for tag in tags_match.group(1).split(',')]
+            
+            cuisine_match = re.search(r'Cuisine:\s*(.+)', text)
+            meal_match = re.search(r'Meal Type:\s*(.+)', text)
+            
+            return {
+                'title': title_match.group(1).strip() if title_match else f"Recipe for {original_request}",
+                'description': desc_match.group(1).strip() if desc_match else "A delicious recipe",
+                'prep_time': prep_match.group(1).strip() if prep_match else "Unknown",
+                'cook_time': cook_match.group(1).strip() if cook_match else "Unknown",
+                'total_time': "Unknown",
+                'servings': servings_match.group(1).strip() if servings_match else "4",
+                'difficulty': difficulty_match.group(1).strip() if difficulty_match else "Medium",
+                'ingredients': ingredients if ingredients else ["Ingredients not parsed"],
+                'instructions': instructions if instructions else ["Instructions not parsed"],
+                'tags': tags if tags else ["recipe"],
+                'cuisine_type': cuisine_match.group(1).strip() if cuisine_match else "Unknown",
+                'meal_type': meal_match.group(1).strip() if meal_match else "Unknown",
+                'enhanced': False,
+                'enhancements_made': [],
+                'chef_notes': [],
+                'success': True,
+                'agent': "fallback_generator",
+                'original_request': original_request
+            }
     
-    recipe_team = MinimalRecipeTeam()
+    recipe_team = FallbackRecipeTeam()
+    print("🔄 Fallback recipe system ready")
 
 @app.route('/')
 def index():
@@ -834,6 +911,3 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
-
-# For Vercel
-app = app

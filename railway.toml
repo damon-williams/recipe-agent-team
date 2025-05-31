@@ -1,0 +1,12 @@
+# railway.toml - Railway configuration file
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python web_app.py"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "never"
+
+[env]
+PORT = { default = "8000" }
