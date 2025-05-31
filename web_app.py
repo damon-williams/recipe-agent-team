@@ -117,35 +117,32 @@ def generate_recipe():
 
 @app.route('/api/recipes', methods=['GET'])
 def get_recipes():
-    limit = int(request.args.get('limit', 10))
-    search = request.args.get('search', '').lower()
-    meal_type = request.args.get('meal_type')
-    difficulty = request.args.get('difficulty')
-    min_quality = float(request.args.get('min_quality', 0))
-
     print("About to query recipes")
-    query = supabase.table('recipes').select("*").order('created_at', desc=True).limit(limit)
-    print("Done querying recipes")
-    
-    if search:
-        query = query.ilike('title', f'%{search}%')
-    if meal_type and meal_type != 'all':
-        query = query.eq('meal_type', meal_type)
-    if difficulty and difficulty != 'all':
-        query = query.eq('difficulty', difficulty)
-    if min_quality:
-        query = query.gte('quality_score', min_quality)
 
-    result = query.execute()
+    try:
+        # Optional: get limit param, default to 10
+        limit = int(request.args.get("limit", 10))
+        
+        print("About to query recipes")
+        # Fetch rows from Supabase
+        result = supabase.table("recipes").select("*").order("created_at", desc=True).limit(limit).execute()
 
-    if result.error:
-        return jsonify({"success": False, "error": result.error.message}), 500
+        # Log and return the results
+        print("Done querying recipes")
+        
+        return jsonify({
+            "success": True,
+            "recipes": result.data,
+            "count": len(result.data)
+        })
 
-    return jsonify({
-        "success": True,
-        "recipes": result.data,
-        "count": len(result.data)
-    })
+    except Exception as e:
+        print("Error in get_recipes:", str(e))
+        return jsonify({
+            "success": False,
+            "message": "Failed to retrieve recipes",
+            "error": str(e)
+        }), 500
 
 
 @app.route('/api/recipes/<string:recipe_id>', methods=['GET'])
