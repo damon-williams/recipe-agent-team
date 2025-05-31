@@ -1,0 +1,21 @@
+# vercel.json - Main Vercel configuration
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "web_app.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "web_app.py"
+    }
+  ],
+  "functions": {
+    "web_app.py": {
+      "maxDuration": 60
+    }
+  }
+}
