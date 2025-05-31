@@ -28,7 +28,7 @@ except ImportError as e:
     recipe_team = None
 
 # Flask app setup
-app = Flask(__name__, static_folder='web/static', template_folder='templates')
+app = Flask(__name__, static_folder='web/static', template_folder='web/templates')
 CORS(app)
 
 # Supabase setup
