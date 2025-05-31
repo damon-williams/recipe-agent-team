@@ -33,9 +33,11 @@ CORS(app)
 
 # Supabase setup
 supabase_url = os.getenv('SUPABASE_URL')
-# supabase_key = os.getenv('SUPABASE_ANON_KEY')
-supabase_key = os.getenv('SUPABASE_SERVICE_KEY')
+supabase_key = os.getenv('SUPABASE_ANON_KEY')
+# supabase_key = os.getenv('SUPABASE_SERVICE_KEY')
 supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+print("✅ Supabase client initialized" if supabase else "❌ Supabase client not initialized")
+
 
 @app.route('/')
 def index():
@@ -121,8 +123,10 @@ def get_recipes():
     difficulty = request.args.get('difficulty')
     min_quality = float(request.args.get('min_quality', 0))
 
+    print("About to query recipes")
     query = supabase.table('recipes').select("*").order('created_at', desc=True).limit(limit)
-
+    print("Done querying recipes")
+    
     if search:
         query = query.ilike('title', f'%{search}%')
     if meal_type and meal_type != 'all':
