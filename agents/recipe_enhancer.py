@@ -4,10 +4,14 @@ from anthropic import Anthropic
 from typing import Dict, List
 import json
 import random
+import re
 
 class RecipeEnhancer:
     def __init__(self):
-        self.client = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        self.client = Anthropic(
+            api_key=os.getenv('ANTHROPIC_API_KEY'),
+            timeout=60.0  # 60 second timeout for API calls
+        )
         self.model = "claude-sonnet-4-20250514"
         
         # Enhancement strategies to make recipes more interesting
@@ -27,30 +31,166 @@ class RecipeEnhancer:
         Uses inspiration from web research if available
         """
         
-        # Choose enhancement strategies based on recipe type and inspiration
-        strategies = self._select_enhancement_strategies(basic_recipe, inspiration_data)
-        
-        prompt = self._build_enhancement_prompt(basic_recipe, inspiration_data, strategies)
-        
         try:
+            print(f"🔧 Enhancing recipe: {basic_recipe.get('title', 'Unknown')}")
+            
+            # Choose enhancement strategies based on recipe type and inspiration
+            strategies = self._select_enhancement_strategies(basic_recipe, inspiration_data)
+            
+            prompt = self._build_enhancement_prompt(basic_recipe, inspiration_data, strategies)
+            
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=2000,
+                timeout=60,  # Explicit timeout per request
                 messages=[{"role": "user", "content": prompt}]
             )
             
             enhanced_text = response.content[0].text.strip()
+            print(f"📝 Claude response length: {len(enhanced_text)} characters")
+            
+            # Enhanced JSON extraction with better error handling
             enhanced_data = self._extract_json_from_response(enhanced_text)
+            
+            if not enhanced_data:
+                print("⚠️ No valid JSON found, using original recipe")
+                return self._mark_enhancement_failed(basic_recipe, "No valid JSON response")
+            
             validated_recipe = self._validate_enhanced_recipe(enhanced_data, basic_recipe)
             
+            print(f"✅ Recipe enhanced successfully: {validated_recipe.get('title', 'Unknown')}")
             return validated_recipe
             
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON parsing failed: {str(e)}")
+            return self._mark_enhancement_failed(basic_recipe, f"JSON parsing error: {str(e)}")
+            
         except Exception as e:
-            # Return original recipe with enhancement error if failed
-            error_recipe = basic_recipe.copy()
-            error_recipe["enhancement_error"] = str(e)
-            error_recipe["enhancement_attempted"] = True
-            return error_recipe
+            print(f"❌ Enhancement failed: {str(e)}")
+            return self._mark_enhancement_failed(basic_recipe, str(e))
+    
+    def _extract_json_from_response(self, response_text: str) -> Dict:
+        """Extract JSON from Claude's response with robust error handling"""
+        
+        print(f"🔍 Extracting JSON from response...")
+        
+        # Method 1: Try to find complete JSON block
+        json_patterns = [
+            r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}',  # Simple nested JSON
+            r'\{.*?\}(?=\s*$)',  # JSON at end of text
+            r'\{.*?\}',  # Any JSON-like structure
+        ]
+        
+        for pattern in json_patterns:
+            matches = re.findall(pattern, response_text, re.DOTALL)
+            for match in matches:
+                try:
+                    # Clean the JSON string
+                    cleaned_json = self._clean_json_string(match)
+                    parsed = json.loads(cleaned_json)
+                    
+                    # Validate that it looks like a recipe
+                    if self._is_valid_recipe_json(parsed):
+                        print(f"✅ Valid JSON found using pattern")
+                        return parsed
+                        
+                except json.JSONDecodeError:
+                    continue
+        
+        # Method 2: Try to extract individual fields if complete JSON fails
+        print("⚠️ Complete JSON extraction failed, trying field extraction...")
+        return self._extract_recipe_fields(response_text)
+    
+    def _clean_json_string(self, json_str: str) -> str:
+        """Clean common JSON formatting issues"""
+        
+        # Remove leading/trailing whitespace
+        json_str = json_str.strip()
+        
+        # Remove trailing commas before closing braces/brackets
+        json_str = re.sub(r',(\s*[}\]])', r'\1', json_str)
+        
+        # Fix missing quotes around keys (common Claude issue)
+        json_str = re.sub(r'(\w+)(\s*):', r'"\1"\2:', json_str)
+        
+        # Fix already quoted keys that got double-quoted
+        json_str = re.sub(r'""(\w+)""', r'"\1"', json_str)
+        
+        return json_str
+    
+    def _is_valid_recipe_json(self, parsed_json: Dict) -> bool:
+        """Check if the parsed JSON looks like a valid recipe"""
+        
+        required_fields = ['title', 'ingredients', 'instructions']
+        return all(field in parsed_json for field in required_fields)
+    
+    def _extract_recipe_fields(self, text: str) -> Dict:
+        """Extract recipe fields individually if JSON parsing fails"""
+        
+        print("🔧 Attempting field-by-field extraction...")
+        
+        extracted = {}
+        
+        # Extract title
+        title_match = re.search(r'"title":\s*"([^"]*)"', text)
+        if title_match:
+            extracted['title'] = title_match.group(1)
+        
+        # Extract description
+        desc_match = re.search(r'"description":\s*"([^"]*)"', text)
+        if desc_match:
+            extracted['description'] = desc_match.group(1)
+        
+        # Extract simple fields
+        simple_fields = ['prep_time', 'cook_time', 'total_time', 'servings', 'difficulty', 'cuisine_type', 'meal_type', 'enhancement_level']
+        for field in simple_fields:
+            match = re.search(rf'"{field}":\s*"([^"]*)"', text)
+            if match:
+                extracted[field] = match.group(1)
+        
+        # Extract arrays (ingredients, instructions, tags, etc.)
+        array_fields = ['ingredients', 'instructions', 'tags', 'enhancements_made', 'chef_notes']
+        for field in array_fields:
+            extracted[field] = self._extract_array_field(text, field)
+        
+        # Only return if we got essential fields
+        if extracted.get('title') and (extracted.get('ingredients') or extracted.get('instructions')):
+            print(f"✅ Field extraction successful: {extracted.get('title')}")
+            return extracted
+        
+        print("❌ Field extraction failed")
+        return {}
+    
+    def _extract_array_field(self, text: str, field_name: str) -> List[str]:
+        """Extract array fields from text"""
+        
+        # Look for array pattern
+        pattern = rf'"{field_name}":\s*\[(.*?)\]'
+        match = re.search(pattern, text, re.DOTALL)
+        
+        if not match:
+            return []
+        
+        array_content = match.group(1)
+        
+        # Extract quoted strings from array
+        items = re.findall(r'"([^"]*)"', array_content)
+        
+        # Clean and filter items
+        cleaned_items = [item.strip() for item in items if item.strip()]
+        
+        return cleaned_items
+    
+    def _mark_enhancement_failed(self, basic_recipe: Dict, error_message: str) -> Dict:
+        """Mark recipe as enhancement failed but return usable recipe"""
+        
+        error_recipe = basic_recipe.copy()
+        error_recipe["enhancement_error"] = error_message
+        error_recipe["enhancement_attempted"] = True
+        error_recipe["enhanced"] = False
+        
+        print(f"⚠️ Returning original recipe due to error: {error_message}")
+        return error_recipe
     
     def _select_enhancement_strategies(self, recipe: Dict, inspiration: Dict = None) -> List[str]:
         """Select 2-3 enhancement strategies based on recipe characteristics"""
@@ -130,7 +270,7 @@ REQUIREMENTS:
 5. Add new ingredients/steps only if they significantly improve the dish
 6. Update cooking times if new techniques require it
 
-Return the enhanced recipe in this EXACT JSON format:
+Return the enhanced recipe in this EXACT JSON format (ensure valid JSON syntax):
 {{
     "title": "Enhanced Recipe Name (can be more appealing)",
     "description": "Updated description highlighting improvements",
@@ -159,27 +299,10 @@ Return the enhanced recipe in this EXACT JSON format:
     "enhancement_level": "moderate/significant"
 }}
 
-Focus on making real improvements that will make the dish more delicious and interesting!
+IMPORTANT: Return ONLY the JSON object, no additional text or explanations.
 """
         
         return prompt
-    
-    def _extract_json_from_response(self, response_text: str) -> Dict:
-        """Extract JSON from Claude's response"""
-        import re
-        
-        # Try to find JSON block
-        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-        if json_match:
-            json_str = json_match.group()
-            try:
-                return json.loads(json_str)
-            except json.JSONDecodeError:
-                # Try to fix common JSON issues
-                json_str = re.sub(r',(\s*[}\]])', r'\1', json_str)
-                return json.loads(json_str)
-        
-        raise Exception("Could not extract valid JSON from enhancement response")
     
     def _validate_enhanced_recipe(self, enhanced_data: Dict, original_recipe: Dict) -> Dict:
         """Validate enhanced recipe and ensure it has all required fields"""
@@ -243,13 +366,12 @@ Return as JSON array:
             
             variations_text = response.content[0].text.strip()
             # Extract JSON array from response
-            import re
             json_match = re.search(r'\[.*\]', variations_text, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
             
         except Exception as e:
-            pass
+            print(f"⚠️ Variations generation failed: {str(e)}")
         
         # Return default variations if generation fails
         return [
@@ -305,6 +427,8 @@ if __name__ == "__main__":
         print(f"Enhancement Level: {enhanced.get('enhancement_level', 'unknown')}")
     else:
         print("❌ Enhancement failed")
+        if enhanced.get("enhancement_error"):
+            print(f"Error: {enhanced['enhancement_error']}")
     
     print(f"\n📊 Enhanced Recipe Preview:")
     print(f"Ingredients: {len(enhanced.get('ingredients', []))} items")

@@ -27,7 +27,7 @@ class RecipeAgentTeam:
         # Pipeline configuration
         self.max_iterations = 2
         self.quality_threshold = 6.0
-        self.timeout_seconds = 55  # Vercel function timeout buffer
+        self.timeout_seconds = 45
         
         print("✅ All agents initialized successfully!")
     
