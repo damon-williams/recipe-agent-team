@@ -323,8 +323,10 @@ class RecipeGenerator {
             const data = await response.json();
             
             if (data.success) {
+                console.log('Got data for recipe ', recipeId)
                 this.displayRecipeInModal(data.recipe);
             } else {
+                console.error('Error viewing recipe:', data.error);
                 alert('Error loading recipe: ' + data.error);
             }
         } catch (error) {
