@@ -82,7 +82,7 @@ class RecipeAgentTeam:
             
             # Step 3: Enhance the recipe
             enhanced_recipe = base_recipe
-            if time.time() - start_time < self.timeout_seconds - 20:  # Time check
+            if time.time() - start_time < self.timeout_seconds - 10:  # Time check
                 try:
                     process_log.append("📝 Recipe Enhancer: Adding creative improvements...")
                     print("📝 Step 3: Enhancing recipe...")
@@ -104,7 +104,7 @@ class RecipeAgentTeam:
             
             # Step 4: Analyze nutrition
             nutrition_data = None
-            if time.time() - start_time < self.timeout_seconds - 15:  # Time check
+            if time.time() - start_time < self.timeout_seconds - 5:  # Time check
                 try:
                     process_log.append("🥗 Nutrition Analyst: Calculating health metrics...")
                     print("🥗 Step 4: Analyzing nutrition...")

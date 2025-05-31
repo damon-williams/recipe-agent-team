@@ -129,7 +129,7 @@ def get_recipes():
 
         # Log and return the results
         print("Done querying recipes")
-        
+
         return jsonify({
             "success": True,
             "recipes": result.data,
@@ -145,17 +145,16 @@ def get_recipes():
         }), 500
 
 
-@app.route('/api/recipes/<string:recipe_id>', methods=['GET'])
+@app.route('/api/recipes/<recipe_id>', methods=['GET'])
 def get_recipe_by_id(recipe_id):
-    result = supabase.table('recipes').select("*").eq("id", recipe_id).single().execute()
+    print(f"Looking up recipe: {recipe_id}")
+    result = supabase.table('recipes').select("*").eq('id', recipe_id).single().execute()
+    
+    if not result.data:
+        return jsonify({'error': 'Recipe not found'}), 404
 
-    if result.error:
-        return jsonify({"success": False, "error": result.error.message}), 404
+    return jsonify(result.data)
 
-    return jsonify({
-        "success": True,
-        "recipe": result.data
-    })
 
 @app.route('/api/health', methods=['GET'])
 def health():
