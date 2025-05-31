@@ -9,20 +9,20 @@
 <body>
     <div class="container">
         <header class="header">
-            <h1>🤖 AI Recipe Generator</h1>
-            <p>Multi-agent cooking assistant that creates recipes using AI</p>
+            <h1>🧑‍🍳 AI Recipe Generator</h1>
+            <p>Create sophisticated recipes using AI</p>
         </header>
 
         <div class="recipe-generator">
             <div class="input-group">
-                <label for="recipeInput">What would you like to cook?</label>
+                <label for="recipeInput">What would you like to cook? Be as general or as specific as you like.</label>
                 <input type="text" id="recipeInput" class="recipe-input" 
                        placeholder="e.g., 'spicy chicken tacos', 'healthy pasta dish', 'chocolate dessert for date night'" 
                        maxlength="200">
             </div>
 
             <button id="generateBtn" class="generate-btn">
-                🚀 Generate Recipe with AI Agents
+                🚀 Generate Recipe
             </button>
 
             <div id="loading" class="loading">
@@ -41,7 +41,7 @@
 
         <div class="recent-recipes">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2>🔥 Recipe Collection</h2>
+                <h2>🔥 Last 10 Recipes Created</h2>
                 <button id="toggleFilters" class="filter-toggle-btn">🔍 Filters</button>
             </div>
 
