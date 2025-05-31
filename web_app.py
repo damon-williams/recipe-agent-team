@@ -113,6 +113,49 @@ def generate_recipe():
         traceback.print_exc()
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
+@app.route('/api/recipes', methods=['GET'])
+def get_recipes():
+    limit = int(request.args.get('limit', 10))
+    search = request.args.get('search', '').lower()
+    meal_type = request.args.get('meal_type')
+    difficulty = request.args.get('difficulty')
+    min_quality = float(request.args.get('min_quality', 0))
+
+    query = supabase.table('recipes').select("*").order('created_at', desc=True).limit(limit)
+
+    if search:
+        query = query.ilike('title', f'%{search}%')
+    if meal_type and meal_type != 'all':
+        query = query.eq('meal_type', meal_type)
+    if difficulty and difficulty != 'all':
+        query = query.eq('difficulty', difficulty)
+    if min_quality:
+        query = query.gte('quality_score', min_quality)
+
+    result = query.execute()
+
+    if result.error:
+        return jsonify({"success": False, "error": result.error.message}), 500
+
+    return jsonify({
+        "success": True,
+        "recipes": result.data,
+        "count": len(result.data)
+    })
+
+
+@app.route('/api/recipes/<string:recipe_id>', methods=['GET'])
+def get_recipe_by_id(recipe_id):
+    result = supabase.table('recipes').select("*").eq("id", recipe_id).single().execute()
+
+    if result.error:
+        return jsonify({"success": False, "error": result.error.message}), 404
+
+    return jsonify({
+        "success": True,
+        "recipe": result.data
+    })
+
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({
