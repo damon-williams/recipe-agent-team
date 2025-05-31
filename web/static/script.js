@@ -319,6 +319,7 @@ class RecipeGenerator {
     
     async viewRecipe(recipeId) {
         try {
+            console.log('Requesting recipe data for ID:', recipeId);
             const response = await fetch(`/api/recipes/${recipeId}`);
             const data = await response.json();
             
@@ -330,7 +331,7 @@ class RecipeGenerator {
                 alert('Error loading recipe: ' + data.error);
             }
         } catch (error) {
-            console.error('Error viewing recipe:', error);
+            console.error('Error encountered trying to view recipe:', error);
             alert('Error loading recipe. Please try again.');
         }
     }
