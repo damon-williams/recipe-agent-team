@@ -268,7 +268,7 @@ class RecipeGenerator {
     async loadRecentRecipes(filters = {}) {
         try {
             const params = new URLSearchParams();
-            params.append('limit', '10');
+            params.append('limit', '25');
             
             if (filters.search) params.append('search', filters.search);
             if (filters.meal_type && filters.meal_type !== 'all') params.append('meal_type', filters.meal_type);
