@@ -1,5 +1,6 @@
 class RecipeGenerator {
     constructor() {
+        this.hasGeneratedFirstRecipe = false; // Track if user has generated their first recipe
         this.init();
     }
     
@@ -11,6 +12,7 @@ class RecipeGenerator {
         this.recipeResult = document.getElementById('recipeResult');
         this.errorMessage = document.getElementById('errorMessage');
         this.recentRecipesList = document.getElementById('recentRecipesList');
+        this.recentRecipesSection = document.getElementById('recentRecipesSection');
         
         // Filter elements
         this.toggleFiltersBtn = document.getElementById('toggleFilters');
@@ -30,7 +32,7 @@ class RecipeGenerator {
         this.printRecipeBtn = document.getElementById('printRecipeBtn');
         
         this.bindEvents();
-        this.loadRecentRecipes();
+        // Don't load recent recipes on initial page load
     }
     
     bindEvents() {
@@ -78,6 +80,13 @@ class RecipeGenerator {
             
             if (data.success) {
                 this.displayRecipe(data);
+                
+                // Show recent recipes section after first successful generation
+                if (!this.hasGeneratedFirstRecipe) {
+                    this.hasGeneratedFirstRecipe = true;
+                    this.showRecentRecipesSection();
+                }
+                
                 this.loadRecentRecipes();
             } else {
                 this.showError(data.error || 'Recipe generation failed');
@@ -88,6 +97,19 @@ class RecipeGenerator {
         } finally {
             this.hideLoading();
         }
+    }
+    
+    showRecentRecipesSection() {
+        // Show the recent recipes section with a smooth reveal
+        this.recentRecipesSection.style.display = 'block';
+        
+        // Smooth scroll to show the new section after a brief delay
+        setTimeout(() => {
+            this.recentRecipesSection.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start' 
+            });
+        }, 500);
     }
     
     showLoading() {
