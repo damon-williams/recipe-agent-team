@@ -107,6 +107,7 @@ body {
     border: 2px solid #e1e5e9;
     position: relative;
     overflow: hidden;
+    max-width: 400px;
 }
 
 .complexity-radio {
@@ -115,7 +116,7 @@ body {
 
 .complexity-option {
     flex: 1;
-    padding: 12px 16px;
+    padding: 12px 20px;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -141,14 +142,6 @@ body {
     transition: color 0.3s ease;
 }
 
-.complexity-description {
-    display: block;
-    font-size: 0.8rem;
-    color: #999;
-    margin-top: 2px;
-    transition: color 0.3s ease;
-}
-
 .complexity-radio:checked + .complexity-option {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -157,10 +150,6 @@ body {
 
 .complexity-radio:checked + .complexity-option .complexity-text {
     color: white;
-}
-
-.complexity-radio:checked + .complexity-option .complexity-description {
-    color: rgba(255, 255, 255, 0.9);
 }
 
 .complexity-option:hover:not(.complexity-radio:checked + .complexity-option) {
@@ -1041,11 +1030,12 @@ body {
     .complexity-control {
         flex-direction: column;
         padding: 8px;
+        max-width: none;
     }
     
     .complexity-option {
         margin: 2px 0;
-        padding: 10px 12px;
+        padding: 12px;
     }
     
     .complexity-option:first-child,
@@ -1056,9 +1046,5 @@ body {
     
     .complexity-text {
         font-size: 0.9rem;
-    }
-    
-    .complexity-description {
-        font-size: 0.75rem;
     }
 }

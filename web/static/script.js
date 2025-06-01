@@ -129,7 +129,7 @@ class RecipeGenerator {
     
     hideLoading() {
         this.generateBtn.disabled = false;
-        this.generateBtn.textContent = '🚀 Generate Recipe with AI Agents';
+        this.generateBtn.textContent = '👨‍🍳 Generate Recipe';
         this.loading.style.display = 'none';
     }
     

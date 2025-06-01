@@ -17,35 +17,32 @@
             <div class="input-group">
                 <label for="recipeInput">What would you like to cook? Be as general or as specific as you like.</label>
                 <input type="text" id="recipeInput" class="recipe-input" 
-                       placeholder="e.g., 'spicy chicken tacos', 'healthy pasta dish', 'chocolate dessert for date night'" 
+                       placeholder=""
                        maxlength="200">
             </div>
 
             <div class="input-group">
                 <label for="complexityControl">Desired Complexity Level:</label>
                 <div class="complexity-control" id="complexityControl">
-                    <input type="radio" id="complexityEasy" name="complexity" value="Easy" class="complexity-radio">
-                    <label for="complexityEasy" class="complexity-option">
-                        <span class="complexity-text">Easy</span>
-                        <span class="complexity-description">Simple techniques</span>
+                    <input type="radio" id="complexitySimple" name="complexity" value="Simple" class="complexity-radio">
+                    <label for="complexitySimple" class="complexity-option">
+                        <span class="complexity-text">Simple</span>
                     </label>
                     
                     <input type="radio" id="complexityMedium" name="complexity" value="Medium" class="complexity-radio" checked>
                     <label for="complexityMedium" class="complexity-option">
                         <span class="complexity-text">Medium</span>
-                        <span class="complexity-description">Moderate skill</span>
                     </label>
                     
-                    <input type="radio" id="complexityHigh" name="complexity" value="High" class="complexity-radio">
-                    <label for="complexityHigh" class="complexity-option">
-                        <span class="complexity-text">High</span>
-                        <span class="complexity-description">Advanced techniques</span>
+                    <input type="radio" id="complexityGourmet" name="complexity" value="Gourmet" class="complexity-radio">
+                    <label for="complexityGourmet" class="complexity-option">
+                        <span class="complexity-text">Gourmet</span>
                     </label>
                 </div>
             </div>
 
             <button id="generateBtn" class="generate-btn">
-                🚀 Generate Recipe
+                👨‍🍳 Generate Recipe
             </button>
 
             <div id="loading" class="loading">
