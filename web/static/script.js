@@ -14,6 +14,8 @@ class RecipeGenerator {
         this.errorMessage = document.getElementById('errorMessage');
         this.recentRecipesList = document.getElementById('recentRecipesList');
         this.recentRecipesSection = document.getElementById('recentRecipesSection');
+        this.cookingFactsContainer = document.getElementById('cookingFactsContainer');
+        this.cookingFact = document.getElementById('cookingFact');
         
         // Filter elements
         this.toggleFiltersBtn = document.getElementById('toggleFilters');
@@ -31,6 +33,43 @@ class RecipeGenerator {
         this.modalRecipeContent = document.getElementById('modalRecipeContent');
         this.closeModalBtn = document.getElementById('closeModal');
         this.printRecipeBtn = document.getElementById('printRecipeBtn');
+        
+        // Cooking facts for loading entertainment
+        this.cookingFacts = [
+            "🍅 Tomatoes are technically fruits, not vegetables!",
+            "🧄 Garlic can help reduce blood pressure and cholesterol.",
+            "🍯 Honey never spoils - archaeologists found edible honey in Egyptian tombs!",
+            "🧅 Cutting onions releases sulfuric compounds that make you cry.",
+            "🥑 Avocados are berries, but strawberries aren't!",
+            "🌶️ Capsaicin in chili peppers can boost your metabolism.",
+            "🧂 Salt was once so valuable it was used as currency.",
+            "🥚 Fresh eggs sink in water, while old eggs float.",
+            "🍄 Mushrooms are more closely related to humans than plants!",
+            "🍫 Dark chocolate contains antioxidants that are good for your heart.",
+            "🥕 Carrots were originally purple, not orange!",
+            "🍞 Bread was the first food baked in space.",
+            "🧀 It takes about 10 pounds of milk to make 1 pound of cheese.",
+            "🍋 Lemons contain more sugar than strawberries!",
+            "🥜 Peanuts aren't actually nuts - they're legumes like peas.",
+            "🍎 Apples float because they're 25% air.",
+            "🥥 Coconut water can be used as blood plasma in emergencies.",
+            "🌽 Corn is grown on every continent except Antarctica.",
+            "🥒 Cucumbers are 96% water, making them very hydrating.",
+            "🍌 Bananas are berries, but raspberries aren't!",
+            "🥩 Marbling in meat comes from intramuscular fat distribution.",
+            "🐟 Fish continues to cook from residual heat after removing from heat.",
+            "🍳 The Maillard reaction creates the browning and flavor in cooked foods.",
+            "🧊 Ice cubes made with hot water freeze faster than those made with cold.",
+            "🥘 Searing meat doesn't actually 'seal in' juices - that's a myth!",
+            "🔥 The 'smoke point' of oil determines its best cooking method.",
+            "🌿 Fresh herbs should be added at the end to preserve their flavor.",
+            "⏰ Resting meat after cooking allows juices to redistribute evenly.",
+            "🧈 Butter burns at a lower temperature than most cooking oils.",
+            "🥄 A pinch of salt can enhance sweetness in desserts!"
+        ];
+        
+        this.factInterval = null;
+        this.currentFactIndex = 0;
         
         this.bindEvents();
         // Don't load recent recipes on initial page load
@@ -119,6 +158,7 @@ class RecipeGenerator {
         this.generateBtn.textContent = 'Generating...';
         this.loading.style.display = 'block';
         this.recipeResult.style.display = 'none';
+        this.startCookingFacts();
         this.simulateProgress();
     }
     
@@ -126,6 +166,52 @@ class RecipeGenerator {
         this.generateBtn.disabled = false;
         this.generateBtn.textContent = '👨‍🍳 Generate Recipe';
         this.loading.style.display = 'none';
+        this.stopCookingFacts();
+    }
+    
+    startCookingFacts() {
+        // Show the container
+        this.cookingFactsContainer.style.display = 'block';
+        
+        // Start with the first fact
+        this.currentFactIndex = 0;
+        this.showCookingFact();
+        
+        // Set interval to rotate facts every 3.5 seconds
+        this.factInterval = setInterval(() => {
+            this.showCookingFact();
+        }, 3500);
+    }
+    
+    stopCookingFacts() {
+        if (this.factInterval) {
+            clearInterval(this.factInterval);
+            this.factInterval = null;
+        }
+        this.cookingFactsContainer.style.display = 'none';
+    }
+    
+    showCookingFact() {
+        const fact = this.cookingFacts[this.currentFactIndex];
+        
+        // Start slide-out animation for current fact
+        this.cookingFact.classList.add('slide-out');
+        
+        // After slide-out completes, change text and slide in
+        setTimeout(() => {
+            this.cookingFact.textContent = fact;
+            this.cookingFact.classList.remove('slide-out');
+            this.cookingFact.classList.add('slide-in');
+            
+            // Remove slide-in class after animation
+            setTimeout(() => {
+                this.cookingFact.classList.remove('slide-in');
+            }, 500);
+            
+        }, 300); // Wait for slide-out to complete
+        
+        // Move to next fact
+        this.currentFactIndex = (this.currentFactIndex + 1) % this.cookingFacts.length;
     }
     
     simulateProgress() {
