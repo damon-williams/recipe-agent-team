@@ -556,6 +556,23 @@ body {
     color: #667eea;
 }
 
+.print-recipe-btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.print-recipe-btn:hover {
+    background: #5a6fd8;
+    transform: translateY(-1px);
+}
+
 .health-insights {
     background: #e3f2fd;
     padding: 20px;

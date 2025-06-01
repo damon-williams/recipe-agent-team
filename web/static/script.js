@@ -513,6 +513,9 @@ class RecipeGenerator {
             <div class="generation-stats">
                 <p><strong>Generated in ${data.generation_time} seconds with ${data.iterations} iteration${data.iterations > 1 ? 's' : ''}</strong></p>
                 <p style="margin-top: 10px; color: #666;">Complexity: ${recipe.difficulty}</p>
+                <div style="margin-top: 15px;">
+                    <button onclick="recipeApp.printCurrentRecipe()" class="print-recipe-btn">🖨️ Print Recipe</button>
+                </div>
             </div>
         `;
         
@@ -768,13 +771,234 @@ class RecipeGenerator {
         document.body.style.overflow = 'auto';
     }
     
-    printRecipe() {
-        // Track print action
-        this.trackEvent('recipe_printed', {
+    printCurrentRecipe() {
+        // Track print action for current recipe
+        this.trackEvent('current_recipe_printed', {
             timestamp: new Date().toISOString()
         });
         
-        window.print();
+        // Create a clean print version of the current recipe
+        const recipeContent = this.recipeResult.cloneNode(true);
+        
+        // Remove the print button from the cloned content
+        const printBtn = recipeContent.querySelector('.print-recipe-btn');
+        if (printBtn) {
+            printBtn.remove();
+        }
+        
+        // Create a new window for printing
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Recipe - Print</title>
+                <style>
+                    ${this.getPrintStyles()}
+                </style>
+            </head>
+            <body>
+                <div class="print-container">
+                    ${recipeContent.innerHTML}
+                </div>
+            </body>
+            </html>
+        `);
+        
+        printWindow.document.close();
+        printWindow.focus();
+        
+        // Wait for content to load, then print
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+        }, 250);
+    }
+    
+    getPrintStyles() {
+        return `
+            @page {
+                margin: 0.75in;
+                size: letter;
+            }
+            
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body {
+                font-family: 'Times New Roman', serif;
+                font-size: 12pt;
+                line-height: 1.4;
+                color: #000;
+                background: white;
+            }
+            
+            .print-container {
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            
+            .recipe-header {
+                text-align: center;
+                margin-bottom: 20pt;
+                page-break-after: avoid;
+            }
+            
+            .recipe-title {
+                font-size: 18pt;
+                font-weight: bold;
+                margin-bottom: 8pt;
+                line-height: 1.2;
+            }
+            
+            .recipe-description {
+                font-size: 11pt;
+                margin-bottom: 12pt;
+                font-style: italic;
+            }
+            
+            .recipe-meta {
+                display: block;
+                text-align: center;
+                margin-bottom: 16pt;
+                font-size: 10pt;
+            }
+            
+            .meta-item {
+                display: inline-block;
+                margin: 0 8pt 4pt 0;
+                padding: 2pt 6pt;
+                background: #f0f0f0;
+                border-radius: 3pt;
+            }
+            
+            .recipe-section {
+                margin-bottom: 16pt;
+                page-break-inside: avoid;
+            }
+            
+            .section-title {
+                font-size: 14pt;
+                font-weight: bold;
+                margin-bottom: 8pt;
+                border-bottom: 1pt solid #ccc;
+                padding-bottom: 2pt;
+            }
+            
+            .ingredients-grid {
+                margin-bottom: 8pt;
+            }
+            
+            .ingredient-item {
+                background: #f8f8f8;
+                padding: 4pt 8pt;
+                margin-bottom: 2pt;
+                border-left: 3pt solid #667eea;
+                font-size: 11pt;
+                line-height: 1.3;
+            }
+            
+            .instructions-list {
+                counter-reset: step-counter;
+            }
+            
+            .instruction-item {
+                counter-increment: step-counter;
+                margin-bottom: 8pt;
+                padding-left: 24pt;
+                position: relative;
+                font-size: 11pt;
+                line-height: 1.4;
+                page-break-inside: avoid;
+            }
+            
+            .instruction-item::before {
+                content: counter(step-counter);
+                position: absolute;
+                left: 0;
+                top: 0;
+                background: #667eea;
+                color: white;
+                width: 16pt;
+                height: 16pt;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 9pt;
+                font-weight: bold;
+            }
+            
+            .nutrition-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 8pt;
+                margin-bottom: 12pt;
+            }
+            
+            .nutrition-card {
+                text-align: center;
+                padding: 8pt;
+                background: #f8f8f8;
+                border-radius: 4pt;
+            }
+            
+            .nutrition-value {
+                font-size: 16pt;
+                font-weight: bold;
+                color: #667eea;
+                display: block;
+            }
+            
+            .nutrition-label {
+                font-size: 9pt;
+                color: #666;
+                margin-top: 2pt;
+            }
+            
+            .health-insights, .enhancement-list {
+                background: #f0f8ff;
+                padding: 8pt;
+                border-left: 3pt solid #2196f3;
+                border-radius: 3pt;
+                margin-bottom: 12pt;
+            }
+            
+            .health-insights h3 {
+                font-size: 11pt;
+                margin-bottom: 4pt;
+                color: #1976d2;
+            }
+            
+            .health-insights ul, .enhancement-list ul {
+                margin: 0;
+                padding-left: 16pt;
+            }
+            
+            .health-insights li, .enhancement-list li {
+                font-size: 10pt;
+                margin-bottom: 2pt;
+                line-height: 1.3;
+            }
+            
+            .generation-stats {
+                margin-top: 16pt;
+                padding-top: 8pt;
+                border-top: 1pt solid #eee;
+                font-size: 9pt;
+                color: #666;
+                text-align: center;
+            }
+            
+            /* Hide elements that shouldn't print */
+            .print-recipe-btn {
+                display: none !important;
+            }
+        `;
     }
     
     showError(message) {
