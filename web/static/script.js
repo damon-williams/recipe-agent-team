@@ -23,7 +23,6 @@ class RecipeGenerator {
         this.searchInput = document.getElementById('searchInput');
         this.mealTypeFilter = document.getElementById('mealTypeFilter');
         this.difficultyFilter = document.getElementById('difficultyFilter');
-        this.qualityFilter = document.getElementById('qualityFilter');
         this.applyFiltersBtn = document.getElementById('applyFilters');
         this.clearFiltersBtn = document.getElementById('clearFilters');
         
@@ -267,7 +266,6 @@ class RecipeGenerator {
                     <span class="meta-item">🔥 Cook: ${recipe.cook_time}</span>
                     <span class="meta-item">👥 Serves: ${recipe.servings}</span>
                     <span class="meta-item">📊 ${recipe.difficulty}</span>
-                    <span class="quality-score">⭐ ${quality.score}/10</span>
                 </div>
             </div>
             
@@ -344,7 +342,7 @@ class RecipeGenerator {
             
             <div class="generation-stats">
                 <p><strong>Generated in ${data.generation_time} seconds with ${data.iterations} iteration${data.iterations > 1 ? 's' : ''}</strong></p>
-                <p style="margin-top: 10px; color: #666;">Quality Level: ${quality.quality_level} | Confidence: ${quality.confidence}</p>
+                <p style="margin-top: 10px; color: #666;">Complexity: ${recipe.difficulty}</p>
             </div>
         `;
         
@@ -355,20 +353,31 @@ class RecipeGenerator {
     
     async loadRecentRecipes(filters = {}) {
         try {
+            console.log('📋 loadRecentRecipes called with filters:', filters);
+            
             const params = new URLSearchParams();
             params.append('limit', '25');
             
-            if (filters.search) params.append('search', filters.search);
-            if (filters.meal_type && filters.meal_type !== 'all') params.append('meal_type', filters.meal_type);
-            if (filters.difficulty && filters.difficulty !== 'all') params.append('difficulty', filters.difficulty);
-            if (filters.min_quality > 0) params.append('min_quality', filters.min_quality);
+            if (filters.search) {
+                params.append('search', filters.search);
+                console.log('📋 Added search filter:', filters.search);
+            }
+            if (filters.meal_type && filters.meal_type !== 'all') {
+                params.append('meal_type', filters.meal_type);
+                console.log('📋 Added meal_type filter:', filters.meal_type);
+            }
+            if (filters.difficulty && filters.difficulty !== 'all') {
+                params.append('difficulty', filters.difficulty);
+                console.log('📋 Added difficulty filter:', filters.difficulty);
+            }
             
-            console.log('API URL:', `/api/recipes?${params.toString()}`); // Debug log to see the actual URL
+            const apiUrl = `/api/recipes?${params.toString()}`;
+            console.log('📋 API URL:', apiUrl);
             
-            const response = await fetch(`/api/recipes?${params.toString()}`);
+            const response = await fetch(apiUrl);
             const data = await response.json();
             
-            console.log('API Response:', data); // Debug log to see what we get back
+            console.log('📋 API Response:', data);
             
             if (data.success && data.recipes.length > 0) {
                 const html = data.recipes.map(recipe => `
@@ -377,7 +386,7 @@ class RecipeGenerator {
                             <strong>${recipe.title}</strong>
                             <br>
                             <small style="color: #666;">
-                                ${recipe.meal_type || 'Unknown'} • ${recipe.difficulty || 'Unknown'} • ⭐ ${recipe.quality_score || 'N/A'}/10
+                                ${recipe.meal_type || 'Unknown'} • ${recipe.difficulty || 'Unknown'}
                             </small>
                             ${recipe.views_count ? `<div class="recipe-views">👁️ ${recipe.views_count} views</div>` : ''}
                         </div>
@@ -388,21 +397,25 @@ class RecipeGenerator {
                 `).join('');
                 
                 this.recentRecipesList.innerHTML = html;
+                console.log('📋 Updated recipe list with', data.recipes.length, 'recipes');
                 
-                if (Object.keys(filters).length > 0) {
+                if (Object.keys(filters).some(key => filters[key] && filters[key] !== 'all')) {
                     const filterInfo = document.createElement('div');
                     filterInfo.style.cssText = 'background: #e3f2fd; padding: 10px; border-radius: 8px; margin-bottom: 15px; color: #1976d2;';
-                    filterInfo.innerHTML = `📊 Found ${data.count} recipes matching your filters`;
+                    filterInfo.innerHTML = `📊 Found ${data.count} recipes matching your search`;
                     this.recentRecipesList.insertBefore(filterInfo, this.recentRecipesList.firstChild);
+                    console.log('📋 Added filter info banner');
                 }
             } else {
-                const message = Object.keys(filters).length > 0 
-                    ? 'No recipes match your filters. Try adjusting your search criteria.'
+                const hasActiveFilters = Object.keys(filters).some(key => filters[key] && filters[key] !== 'all');
+                const message = hasActiveFilters 
+                    ? 'No recipes match your search criteria. Try adjusting your filters.'
                     : 'No recipes generated yet. Be the first!';
                 this.recentRecipesList.innerHTML = `<p style="color: #666;">${message}</p>`;
+                console.log('📋 No recipes found, showing message:', message);
             }
         } catch (error) {
-            console.error('Error loading recipes:', error);
+            console.error('❌ Error loading recipes:', error);
             this.recentRecipesList.innerHTML = '<p style="color: #999;">Unable to load recipes</p>';
         }
     }
@@ -410,24 +423,32 @@ class RecipeGenerator {
     toggleFilters() {
         const isVisible = this.filterPanel.style.display !== 'none';
         this.filterPanel.style.display = isVisible ? 'none' : 'block';
-        this.toggleFiltersBtn.textContent = isVisible ? '🔍 Filters' : '🔍 Hide Filters';
+        this.toggleFiltersBtn.textContent = isVisible ? '🔍 Search All Recipes' : '🔍 Hide Search';
     }
     
     applyFilters() {
+        console.log('🔍 Apply Filters clicked - gathering filter values...');
+        
         const filters = {
             search: this.searchInput.value.trim(),
             meal_type: this.mealTypeFilter.value,
-            difficulty: this.difficultyFilter.value,
-            min_quality: parseFloat(this.qualityFilter.value)
+            difficulty: this.difficultyFilter.value
         };
+        
+        console.log('🔍 Filter values:', filters);
+        console.log('🔍 Calling loadRecentRecipes with filters...');
+        
         this.loadRecentRecipes(filters);
     }
     
     clearFilters() {
+        console.log('🔍 Clear Filters clicked - resetting all values...');
+        
         this.searchInput.value = '';
         this.mealTypeFilter.value = 'all';
         this.difficultyFilter.value = 'all';
-        this.qualityFilter.value = '0';
+        
+        console.log('🔍 Calling loadRecentRecipes without filters...');
         this.loadRecentRecipes();
     }
     
@@ -498,7 +519,6 @@ class RecipeGenerator {
                     <span class="meta-item">🔥 Cook: ${recipe.cook_time}</span>
                     <span class="meta-item">👥 Serves: ${recipe.servings}</span>
                     <span class="meta-item">📊 ${recipe.difficulty}</span>
-                    <span class="quality-score">⭐ ${recipe.quality_score}/10</span>
                 </div>
             </div>
             
