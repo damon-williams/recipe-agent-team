@@ -243,7 +243,7 @@ class RecipeGenerator {
     
     hideLoading() {
         this.generateBtn.disabled = false;
-        this.generateBtn.textContent = '👨‍🍳 Generate Recipe';
+        this.generateBtn.textContent = '🍳 Generate Recipe';
         this.loading.style.display = 'none';
         this.stopCookingFacts();
     }
