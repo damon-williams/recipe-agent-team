@@ -127,6 +127,22 @@ class RecipeGenerator {
         
         this.bindEvents();
         // Don't load recent recipes on initial page load
+        
+        // Track page load
+        this.trackEvent('page_loaded', {
+            timestamp: new Date().toISOString()
+        });
+    }
+    
+    trackEvent(eventName, properties = {}) {
+        try {
+            if (typeof posthog !== 'undefined') {
+                posthog.capture(eventName, properties);
+                console.log(`📊 Tracked: ${eventName}`, properties);
+            }
+        } catch (error) {
+            console.log('PostHog tracking error:', error);
+        }
     }
     
     bindEvents() {
@@ -167,8 +183,17 @@ class RecipeGenerator {
             return;
         }
         
+        // Track recipe generation start
+        this.trackEvent('recipe_generation_started', {
+            recipe_request: request,
+            complexity: complexity,
+            timestamp: new Date().toISOString()
+        });
+        
         this.showLoading();
         this.hideError();
+        
+        const startTime = Date.now();
         
         try {
             const response = await fetch('/api/generate-recipe', {
@@ -185,20 +210,64 @@ class RecipeGenerator {
             const data = await response.json();
             
             if (data.success) {
+                const generationTime = (Date.now() - startTime) / 1000;
+                
+                // Track successful recipe generation
+                this.trackEvent('recipe_generated_success', {
+                    recipe_title: data.recipe?.title,
+                    recipe_request: request,
+                    complexity: complexity,
+                    generation_time: generationTime,
+                    server_generation_time: data.generation_time,
+                    meal_type: data.recipe?.meal_type,
+                    cuisine_type: data.recipe?.cuisine_type,
+                    ingredients_count: data.recipe?.ingredients?.length || 0,
+                    instructions_count: data.recipe?.instructions?.length || 0,
+                    quality_score: data.quality?.score,
+                    nutrition_method: data.nutrition?.analysis_method,
+                    timestamp: new Date().toISOString()
+                });
+                
                 this.displayRecipe(data);
                 
                 // Show recent recipes section after first successful generation
                 if (!this.hasGeneratedFirstRecipe) {
                     this.hasGeneratedFirstRecipe = true;
                     this.showRecentRecipesSection();
+                    
+                    // Track first recipe milestone
+                    this.trackEvent('first_recipe_generated', {
+                        recipe_title: data.recipe?.title,
+                        complexity: complexity,
+                        timestamp: new Date().toISOString()
+                    });
                 }
                 
                 this.loadRecentRecipes();
             } else {
+                // Track recipe generation failure
+                this.trackEvent('recipe_generation_failed', {
+                    recipe_request: request,
+                    complexity: complexity,
+                    error: data.error,
+                    generation_time: (Date.now() - startTime) / 1000,
+                    timestamp: new Date().toISOString()
+                });
+                
                 this.showError(data.error || 'Recipe generation failed');
             }
         } catch (error) {
             console.error('Error:', error);
+            
+            // Track network/system errors
+            this.trackEvent('recipe_generation_error', {
+                recipe_request: request,
+                complexity: complexity,
+                error: error.message,
+                generation_time: (Date.now() - startTime) / 1000,
+                timestamp: new Date().toISOString()
+            });
+            
             this.showError('Network error. Please try again.');
         } finally {
             this.hideLoading();
@@ -214,6 +283,11 @@ class RecipeGenerator {
     }
     
     showAllRecipes() {
+        // Track view all recipes action
+        this.trackEvent('view_all_recipes_clicked', {
+            timestamp: new Date().toISOString()
+        });
+        
         // Show recent recipes section if not already visible
         if (!this.hasGeneratedFirstRecipe) {
             this.hasGeneratedFirstRecipe = true;
@@ -512,6 +586,17 @@ class RecipeGenerator {
             difficulty: this.difficultyFilter.value
         };
         
+        // Track filter usage
+        this.trackEvent('filters_applied', {
+            search_term: filters.search || null,
+            meal_type: filters.meal_type !== 'all' ? filters.meal_type : null,
+            difficulty: filters.difficulty !== 'all' ? filters.difficulty : null,
+            has_search: !!filters.search,
+            has_meal_filter: filters.meal_type !== 'all',
+            has_difficulty_filter: filters.difficulty !== 'all',
+            timestamp: new Date().toISOString()
+        });
+        
         console.log('🔍 Filter values:', filters);
         console.log('🔍 Calling loadRecentRecipes with filters...');
         
@@ -532,12 +617,28 @@ class RecipeGenerator {
     async viewRecipe(recipeId) {
         try {
             console.log('Requesting recipe data for ID:', recipeId);
+            
+            // Track recipe view
+            this.trackEvent('recipe_viewed', {
+                recipe_id: recipeId,
+                timestamp: new Date().toISOString()
+            });
+            
             const response = await fetch(`/api/recipes/${recipeId}`);
             const data = await response.json();
             
             if (data.success) {
                 console.log('Got data for recipe ', recipeId)
                 this.displayRecipeInModal(data.recipe);
+                
+                // Track successful recipe modal open
+                this.trackEvent('recipe_modal_opened', {
+                    recipe_id: recipeId,
+                    recipe_title: data.recipe?.title,
+                    complexity: data.recipe?.difficulty,
+                    meal_type: data.recipe?.meal_type,
+                    timestamp: new Date().toISOString()
+                });
             } else {
                 console.error('Error viewing recipe:', data.error);
                 alert('Error loading recipe: ' + data.error);
@@ -649,6 +750,11 @@ class RecipeGenerator {
     }
     
     printRecipe() {
+        // Track print action
+        this.trackEvent('recipe_printed', {
+            timestamp: new Date().toISOString()
+        });
+        
         window.print();
     }
     
