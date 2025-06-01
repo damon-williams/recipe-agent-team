@@ -56,15 +56,25 @@ def generate_recipe():
         if not user_request:
             return jsonify({'error': 'Recipe request is required'}), 400
 
-        # Validate complexity level
+        # Validate complexity level and map frontend values to backend values
+        complexity_mapping = {
+            'Simple': 'Easy',    # Map frontend "Simple" to backend "Easy"
+            'Medium': 'Medium',  # Direct mapping
+            'Gourmet': 'High'    # Map frontend "Gourmet" to backend "High"
+        }
+        
+        # Map the complexity or use original if not in mapping
+        backend_complexity = complexity_mapping.get(complexity, complexity)
+        
+        # Validate backend complexity level
         valid_complexity_levels = ['Easy', 'Medium', 'High']
-        if complexity not in valid_complexity_levels:
-            complexity = 'Medium'  # Fallback to Medium for invalid values
+        if backend_complexity not in valid_complexity_levels:
+            backend_complexity = 'Medium'  # Fallback to Medium for invalid values
 
-        print(f"🌐 Received request: {user_request} (Complexity: {complexity})")
+        print(f"🌐 Received request: {user_request} (Frontend: {complexity} → Backend: {backend_complexity})")
 
         start_time = time.time()
-        result = recipe_team.generate_recipe(user_request, complexity)
+        result = recipe_team.generate_recipe(user_request, backend_complexity)
         generation_time = int(time.time() - start_time)
 
         if result.get('success'):
@@ -72,7 +82,8 @@ def generate_recipe():
                 'title': result['recipe'].get('title'),
                 'description': result['recipe'].get('description'),
                 'original_request': user_request,
-                'complexity': complexity,  # Store the requested complexity
+                'complexity': complexity,  # Store the frontend complexity value
+                'backend_complexity': backend_complexity,  # Store the backend complexity value
                 'prep_time': result['recipe'].get('prep_time'),
                 'cook_time': result['recipe'].get('cook_time'),
                 'total_time': result['recipe'].get('total_time'),

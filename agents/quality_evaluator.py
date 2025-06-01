@@ -12,6 +12,7 @@ class QualityMetrics:
     practicality_score: float
     nutrition_score: float
     completeness_score: float
+    complexity_alignment_score: float
     overall_score: float
     confidence: str
 
@@ -27,41 +28,58 @@ class QualityEvaluator:
             'excellent_quality': 9.0
         }
         
-        # Weights for different quality aspects
+        # Weights for different quality aspects (updated with complexity alignment)
         self.evaluation_weights = {
-            'creativity': 0.25,
-            'practicality': 0.30,
-            'nutrition': 0.25,
-            'completeness': 0.20
+            'creativity': 0.20,
+            'practicality': 0.25,
+            'nutrition': 0.20,
+            'completeness': 0.15,
+            'complexity_alignment': 0.20  # New metric for complexity matching
         }
+        
+        print("⭐ QualityEvaluator initialized with complexity-aware scoring")
     
-    def evaluate_recipe(self, recipe: Dict, nutrition_data: Dict = None, inspiration_data: Dict = None) -> Dict:
+    def evaluate_recipe(self, recipe: Dict, nutrition_data: Dict = None, inspiration_data: Dict = None, complexity: str = "Medium") -> Dict:
         """
-        Comprehensive recipe quality evaluation
+        Comprehensive recipe quality evaluation with complexity consideration
         Returns scoring and recommendations for improvement
         """
         
-        print(f"⭐ Evaluating quality of: {recipe.get('title', 'Unknown Recipe')}")
+        print(f"⭐ Evaluating quality of: {recipe.get('title', 'Unknown Recipe')} (Expected: {complexity} complexity)")
         
         try:
             # Evaluate different quality dimensions
-            creativity_result = self._evaluate_creativity(recipe, inspiration_data)
-            practicality_result = self._evaluate_practicality(recipe)
+            creativity_result = self._evaluate_creativity(recipe, inspiration_data, complexity)
+            practicality_result = self._evaluate_practicality(recipe, complexity)
             nutrition_result = self._evaluate_nutrition_quality(nutrition_data) if nutrition_data else None
             completeness_result = self._evaluate_completeness(recipe)
+            complexity_alignment_result = self._evaluate_complexity_alignment(recipe, complexity)
+            
+            # Debug output for each evaluation
+            print(f"⭐ Creativity Score: {creativity_result.get('score', 'N/A')}/10")
+            print(f"⭐ Practicality Score: {practicality_result.get('score', 'N/A')}/10")
+            print(f"⭐ Nutrition Score: {nutrition_result.get('score', 'N/A') if nutrition_result else 'N/A'}/10")
+            print(f"⭐ Completeness Score: {completeness_result.get('score', 'N/A')}/10")
+            print(f"⭐ Complexity Alignment Score: {complexity_alignment_result.get('score', 'N/A')}/10")
             
             # Calculate weighted overall score
             overall_score = self._calculate_overall_score(
-                creativity_result, practicality_result, nutrition_result, completeness_result
+                creativity_result, practicality_result, nutrition_result, 
+                completeness_result, complexity_alignment_result
             )
+            
+            print(f"⭐ Overall Weighted Score: {overall_score}/10")
             
             # Generate improvement recommendations
             recommendations = self._generate_improvement_recommendations(
-                recipe, creativity_result, practicality_result, nutrition_result, completeness_result
+                recipe, creativity_result, practicality_result, nutrition_result, 
+                completeness_result, complexity_alignment_result, complexity
             )
             
             # Determine if recipe meets quality threshold
             quality_verdict = self._determine_quality_verdict(overall_score)
+            
+            print(f"⭐ Quality Verdict: {quality_verdict} ({self._get_quality_level(overall_score)})")
             
             return {
                 'score': overall_score,
@@ -70,21 +88,129 @@ class QualityEvaluator:
                     'creativity': creativity_result,
                     'practicality': practicality_result,
                     'nutrition': nutrition_result,
-                    'completeness': completeness_result
+                    'completeness': completeness_result,
+                    'complexity_alignment': complexity_alignment_result
                 },
                 'recommendations': recommendations,
                 'meets_threshold': overall_score >= self.quality_thresholds['minimum_acceptable'],
                 'quality_level': self._get_quality_level(overall_score),
-                'confidence': self._calculate_confidence(creativity_result, practicality_result, nutrition_result, completeness_result),
-                'evaluation_timestamp': self._get_timestamp()
+                'confidence': self._calculate_confidence(creativity_result, practicality_result, nutrition_result, completeness_result, complexity_alignment_result),
+                'evaluation_timestamp': self._get_timestamp(),
+                'complexity_evaluated': complexity
             }
             
         except Exception as e:
             print(f"⚠️  Quality evaluation failed: {str(e)}")
-            return self._create_fallback_evaluation(recipe)
+            return self._create_fallback_evaluation(recipe, complexity)
     
-    def _evaluate_creativity(self, recipe: Dict, inspiration_data: Dict = None) -> Dict:
-        """Evaluate the creativity and innovation of the recipe"""
+    def _evaluate_complexity_alignment(self, recipe: Dict, expected_complexity: str) -> Dict:
+        """Evaluate how well the recipe matches the expected complexity level"""
+        
+        print(f"⭐ Evaluating complexity alignment for {expected_complexity} level...")
+        
+        # Prepare recipe data for complexity evaluation
+        recipe_data = {
+            'title': recipe.get('title'),
+            'ingredients': recipe.get('ingredients', []),
+            'instructions': recipe.get('instructions', []),
+            'prep_time': recipe.get('prep_time'),
+            'cook_time': recipe.get('cook_time'),
+            'difficulty': recipe.get('difficulty')
+        }
+        
+        complexity_criteria = self._get_complexity_criteria(expected_complexity)
+        
+        complexity_prompt = f"""
+Evaluate how well this recipe matches the {expected_complexity} complexity level on a scale of 1-10:
+
+RECIPE TO EVALUATE:
+{json.dumps(recipe_data, indent=2)}
+
+EXPECTED COMPLEXITY: {expected_complexity}
+{complexity_criteria}
+
+Evaluate complexity alignment based on:
+1. Ingredient accessibility and specialization
+2. Cooking techniques required
+3. Time commitment (prep + cook)
+4. Equipment needs
+5. Skill level required
+6. Number of steps and sub-processes
+
+Return JSON:
+{{
+    "score": number (1-10),
+    "alignment_analysis": "detailed explanation of how well it matches {expected_complexity}",
+    "complexity_gaps": ["what makes it more/less complex than expected"],
+    "strengths": ["aspects that match {expected_complexity} well"],
+    "improvements": ["how to better align with {expected_complexity}"],
+    "confidence": "low/medium/high"
+}}
+
+Score 10 = perfect alignment, 5 = somewhat matches, 1 = completely wrong complexity
+"""
+        
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=800,
+                messages=[{"role": "user", "content": complexity_prompt}]
+            )
+            
+            result = self._extract_evaluation_json(response.content[0].text)
+            score = result.get('score', 5.0)
+            
+            print(f"⭐ Complexity alignment: {score}/10 for {expected_complexity}")
+            if result.get('alignment_analysis'):
+                print(f"⭐ Analysis: {result['alignment_analysis'][:100]}...")
+            
+            return result
+            
+        except Exception as e:
+            print(f"⚠️ Complexity alignment evaluation failed: {str(e)}")
+            return self._fallback_complexity_score(recipe, expected_complexity)
+    
+    def _get_complexity_criteria(self, complexity: str) -> str:
+        """Get detailed criteria for each complexity level"""
+        
+        criteria = {
+            "Simple": """
+SIMPLE COMPLEXITY CRITERIA:
+- Common ingredients available in most grocery stores
+- Basic cooking techniques (sauté, boil, bake, grill)
+- 8-10 ingredients maximum
+- Under 45 minutes total time
+- Basic kitchen equipment only
+- Clear, straightforward instructions
+- Minimal prep work required""",
+            
+            "Medium": """
+MEDIUM COMPLEXITY CRITERIA:
+- Mix of common and some specialty ingredients
+- Moderate techniques (braising, sauce-making, roasting)
+- 10-15 ingredients
+- 45-90 minutes total time
+- Some specialized tools acceptable
+- Multi-step processes but organized
+- Some advanced techniques but accessible""",
+            
+            "Gourmet": """
+GOURMET COMPLEXITY CRITERIA:
+- Premium, specialty, or hard-to-find ingredients
+- Advanced techniques (confit, emulsification, sous vide)
+- 15+ ingredients for complex flavors
+- 90+ minutes or multi-day preparation
+- Specialized equipment may be required
+- Professional-level techniques
+- Restaurant-quality presentation focus"""
+        }
+        
+        return criteria.get(complexity, criteria["Medium"])
+    
+    def _evaluate_creativity(self, recipe: Dict, inspiration_data: Dict = None, complexity: str = "Medium") -> Dict:
+        """Evaluate the creativity and innovation of the recipe with complexity context"""
+        
+        print(f"⭐ Evaluating creativity for {complexity} complexity level...")
         
         # Prepare recipe data for evaluation
         recipe_data = {
@@ -100,19 +226,25 @@ class QualityEvaluator:
             inspiration_text = "INSPIRATION USED:" + json.dumps(inspiration_data, indent=2)
         
         creativity_prompt = f"""
-Evaluate the CREATIVITY and INNOVATION of this recipe on a scale of 1-10:
+Evaluate the CREATIVITY and INNOVATION of this {complexity} complexity recipe on a scale of 1-10:
 
 RECIPE TO EVALUATE:
 {json.dumps(recipe_data, indent=2)}
 
+COMPLEXITY LEVEL: {complexity}
 {inspiration_text}
 
 Evaluate creativity based on:
-1. Ingredient combinations (unique, interesting pairings)
-2. Cooking techniques (sophistication, innovation)
-3. Flavor profiles (complexity, balance, uniqueness)
-4. Presentation elements (visual appeal, plating)
+1. Ingredient combinations (unique, interesting pairings for {complexity} level)
+2. Cooking techniques (innovation appropriate for {complexity})
+3. Flavor profiles (complexity and balance suitable for {complexity})
+4. Presentation elements (visual appeal matching {complexity})
 5. Creative enhancements over basic versions
+
+COMPLEXITY CONTEXT:
+- Simple: Creativity through accessible flavor combinations and simple techniques
+- Medium: Balanced innovation with moderate complexity
+- Gourmet: High creativity expected with advanced techniques and premium ingredients
 
 Return JSON:
 {{
@@ -123,7 +255,7 @@ Return JSON:
     "confidence": "low/medium/high"
 }}
 
-Be discerning - not every recipe needs to be super creative, but note what makes it special.
+Rate creativity relative to the {complexity} complexity level expectations.
 """
         
         try:
@@ -133,13 +265,20 @@ Be discerning - not every recipe needs to be super creative, but note what makes
                 messages=[{"role": "user", "content": creativity_prompt}]
             )
             
-            return self._extract_evaluation_json(response.content[0].text)
+            result = self._extract_evaluation_json(response.content[0].text)
+            score = result.get('score', 5.0)
+            print(f"⭐ Creativity: {score}/10 for {complexity} level")
+            
+            return result
             
         except Exception as e:
+            print(f"⚠️ Creativity evaluation failed: {str(e)}")
             return self._fallback_creativity_score(recipe)
     
-    def _evaluate_practicality(self, recipe: Dict) -> Dict:
-        """Evaluate how practical and achievable the recipe is for home cooks"""
+    def _evaluate_practicality(self, recipe: Dict, complexity: str = "Medium") -> Dict:
+        """Evaluate how practical and achievable the recipe is with complexity expectations"""
+        
+        print(f"⭐ Evaluating practicality for {complexity} complexity level...")
         
         # Prepare recipe data for practicality evaluation
         practicality_data = {
@@ -153,16 +292,23 @@ Be discerning - not every recipe needs to be super creative, but note what makes
         }
         
         practicality_prompt = f"""
-Evaluate the PRACTICALITY of this recipe for home cooks on a scale of 1-10:
+Evaluate the PRACTICALITY of this {complexity} complexity recipe for home cooks on a scale of 1-10:
 
 RECIPE TO EVALUATE:
 {json.dumps(practicality_data, indent=2)}
 
-Evaluate practicality based on:
-1. Ingredient accessibility (common vs. specialty ingredients)
-2. Equipment requirements (basic vs. specialized tools)
-3. Time commitment (reasonable prep and cook times)
-4. Skill level required (matches stated difficulty)
+COMPLEXITY LEVEL: {complexity}
+
+Evaluate practicality based on complexity-appropriate expectations:
+
+FOR {complexity.upper()} RECIPES:
+{self._get_complexity_criteria(complexity)}
+
+Rate practicality considering:
+1. Ingredient accessibility (appropriate for {complexity} level)
+2. Equipment requirements (reasonable for {complexity})
+3. Time commitment (suitable for {complexity} expectations)
+4. Skill level required (matches {complexity} level)
 5. Clear, actionable instructions
 6. Realistic serving sizes and portions
 
@@ -176,7 +322,7 @@ Return JSON:
     "confidence": "low/medium/high"
 }}
 
-Focus on whether a typical home cook could successfully make this recipe.
+Rate against {complexity} complexity expectations, not absolute simplicity.
 """
         
         try:
@@ -186,15 +332,23 @@ Focus on whether a typical home cook could successfully make this recipe.
                 messages=[{"role": "user", "content": practicality_prompt}]
             )
             
-            return self._extract_evaluation_json(response.content[0].text)
+            result = self._extract_evaluation_json(response.content[0].text)
+            score = result.get('score', 5.0)
+            print(f"⭐ Practicality: {score}/10 for {complexity} level")
+            
+            return result
             
         except Exception as e:
+            print(f"⚠️ Practicality evaluation failed: {str(e)}")
             return self._fallback_practicality_score(recipe)
     
     def _evaluate_nutrition_quality(self, nutrition_data: Dict) -> Dict:
         """Evaluate the nutritional quality of the recipe"""
         
+        print(f"⭐ Evaluating nutrition quality...")
+        
         if not nutrition_data or not nutrition_data.get('nutrition_per_serving'):
+            print(f"⚠️ No nutrition data available")
             return {
                 'score': 5.0,
                 'strengths': [],
@@ -249,9 +403,13 @@ Return JSON:
             if evaluation.get('score') and existing_score:
                 evaluation['score'] = (evaluation['score'] + existing_score) / 2
             
+            score = evaluation.get('score', 5.0)
+            print(f"⭐ Nutrition: {score}/10")
+            
             return evaluation
             
         except Exception as e:
+            print(f"⚠️ Nutrition evaluation failed: {str(e)}")
             return {
                 'score': existing_score,
                 'strengths': nutrition_data.get('health_insights', [])[:2],
@@ -262,6 +420,8 @@ Return JSON:
     
     def _evaluate_completeness(self, recipe: Dict) -> Dict:
         """Evaluate how complete and well-structured the recipe is"""
+        
+        print(f"⭐ Evaluating recipe completeness...")
         
         # Check for required fields and quality
         completeness_metrics = {
@@ -280,6 +440,8 @@ Return JSON:
         total_checks = len(completeness_metrics)
         passed_checks = sum(1 for passed in completeness_metrics.values() if passed)
         completeness_score = (passed_checks / total_checks) * 10
+        
+        print(f"⭐ Completeness: {completeness_score}/10 ({passed_checks}/{total_checks} checks passed)")
         
         # Generate feedback
         strengths = []
@@ -336,8 +498,8 @@ Return JSON:
         return clear_count >= len(instructions) * 0.8  # 80% should be detailed
     
     def _calculate_overall_score(self, creativity: Dict, practicality: Dict, 
-                               nutrition: Dict, completeness: Dict) -> float:
-        """Calculate weighted overall quality score"""
+                               nutrition: Dict, completeness: Dict, complexity_alignment: Dict) -> float:
+        """Calculate weighted overall quality score including complexity alignment"""
         
         scores = []
         weights = []
@@ -358,6 +520,10 @@ Return JSON:
             scores.append(completeness['score'])
             weights.append(self.evaluation_weights['completeness'])
         
+        if complexity_alignment and complexity_alignment.get('score'):
+            scores.append(complexity_alignment['score'])
+            weights.append(self.evaluation_weights['complexity_alignment'])
+        
         if not scores:
             return 5.0  # Neutral score if no evaluations
         
@@ -365,17 +531,22 @@ Return JSON:
         weighted_sum = sum(score * weight for score, weight in zip(scores, weights))
         total_weight = sum(weights)
         
-        return round(weighted_sum / total_weight, 1)
+        overall = round(weighted_sum / total_weight, 1)
+        print(f"⭐ Weighted calculation: {overall} from {len(scores)} metrics")
+        
+        return overall
     
     def _generate_improvement_recommendations(self, recipe: Dict, creativity: Dict, 
                                            practicality: Dict, nutrition: Dict, 
-                                           completeness: Dict) -> List[str]:
+                                           completeness: Dict, complexity_alignment: Dict, complexity: str) -> List[str]:
         """Generate specific recommendations for recipe improvement"""
+        
+        print(f"⭐ Generating improvement recommendations for {complexity} complexity...")
         
         recommendations = []
         
         # Collect improvement areas from each evaluation
-        for evaluation in [creativity, practicality, nutrition, completeness]:
+        for evaluation in [creativity, practicality, nutrition, completeness, complexity_alignment]:
             if evaluation and evaluation.get('areas_for_improvement'):
                 recommendations.extend(evaluation['areas_for_improvement'][:2])  # Top 2 from each
         
@@ -383,13 +554,19 @@ Return JSON:
         unique_recommendations = list(dict.fromkeys(recommendations))
         
         # Prioritize based on scores (lower scores = higher priority)
+        if complexity_alignment and complexity_alignment.get('score', 10) < 6:
+            unique_recommendations.insert(0, f"Better align recipe with {complexity} complexity expectations")
+        
         if creativity and creativity.get('score', 10) < 6:
-            unique_recommendations.insert(0, "Consider adding more creative or unique elements")
+            unique_recommendations.insert(0, f"Add more creative elements appropriate for {complexity} level")
         
         if practicality and practicality.get('score', 10) < 6:
-            unique_recommendations.insert(0, "Simplify ingredients or techniques for home cooks")
+            unique_recommendations.insert(0, f"Improve practicality for {complexity} complexity level")
         
-        return unique_recommendations[:5]  # Top 5 recommendations
+        final_recommendations = unique_recommendations[:5]  # Top 5 recommendations
+        print(f"⭐ Generated {len(final_recommendations)} recommendations")
+        
+        return final_recommendations
     
     def _determine_quality_verdict(self, overall_score: float) -> str:
         """Determine quality verdict based on score"""
@@ -451,6 +628,30 @@ Return JSON:
         
         return {'score': 5.0, 'confidence': 'low', 'strengths': [], 'areas_for_improvement': []}
     
+    def _fallback_complexity_score(self, recipe: Dict, complexity: str) -> Dict:
+        """Fallback complexity alignment evaluation"""
+        
+        score = 5.0
+        
+        # Simple heuristics based on complexity
+        ingredient_count = len(recipe.get('ingredients', []))
+        instruction_count = len(recipe.get('instructions', []))
+        
+        if complexity == "Simple":
+            if ingredient_count <= 10 and instruction_count <= 8:
+                score += 1
+        elif complexity == "Gourmet":
+            if ingredient_count >= 12 and instruction_count >= 10:
+                score += 1
+        
+        return {
+            'score': score,
+            'alignment_analysis': f'Basic heuristic evaluation for {complexity} complexity',
+            'strengths': [f'Recipe structure suits {complexity} level'],
+            'areas_for_improvement': [f'Verify alignment with {complexity} complexity standards'],
+            'confidence': 'low'
+        }
+    
     def _fallback_creativity_score(self, recipe: Dict) -> Dict:
         """Fallback creativity evaluation"""
         
@@ -475,7 +676,7 @@ Return JSON:
         score = 6.0
         
         # Simple checks
-        if recipe.get('difficulty', '').lower() == 'easy':
+        if recipe.get('difficulty', '').lower() == 'simple':
             score += 1
         if len(recipe.get('ingredients', [])) <= 10:
             score += 0.5
@@ -487,8 +688,10 @@ Return JSON:
             'confidence': 'low'
         }
     
-    def _create_fallback_evaluation(self, recipe: Dict) -> Dict:
+    def _create_fallback_evaluation(self, recipe: Dict, complexity: str) -> Dict:
         """Create fallback evaluation when main evaluation fails"""
+        
+        print(f"⚠️ Using fallback evaluation for {complexity} complexity")
         
         return {
             'score': 5.0,
@@ -497,14 +700,16 @@ Return JSON:
                 'creativity': {'score': 5.0, 'confidence': 'low'},
                 'practicality': {'score': 5.0, 'confidence': 'low'},
                 'nutrition': {'score': 5.0, 'confidence': 'low'},
-                'completeness': {'score': 5.0, 'confidence': 'low'}
+                'completeness': {'score': 5.0, 'confidence': 'low'},
+                'complexity_alignment': {'score': 5.0, 'confidence': 'low'}
             },
-            'recommendations': ['Evaluation failed - manual review needed'],
+            'recommendations': [f'Evaluation failed - manual review needed for {complexity} complexity'],
             'meets_threshold': False,
             'quality_level': 'Unknown',
             'confidence': 'low',
             'evaluation_error': True,
-            'evaluation_timestamp': self._get_timestamp()
+            'evaluation_timestamp': self._get_timestamp(),
+            'complexity_evaluated': complexity
         }
     
     def _get_timestamp(self) -> str:
@@ -517,67 +722,46 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
     
-    # Test recipe with enhancements
-    test_recipe = {
-        'title': 'Pan-Seared Chicken with Lemon Herb Risotto',
-        'description': 'Elevated comfort food with restaurant-quality techniques',
-        'prep_time': '20 minutes',
-        'cook_time': '35 minutes',
-        'servings': '4',
-        'difficulty': 'Medium',
-        'ingredients': [
-            '4 chicken breasts (6 oz each)',
-            '1.5 cups Arborio rice',
-            '4 cups warm chicken stock',
-            '1 cup white wine',
-            '2 lemons (zested and juiced)',
-            '3 tbsp fresh herbs (thyme, rosemary)',
-            '2 tbsp olive oil',
-            '2 tbsp butter'
-        ],
-        'instructions': [
-            'Season chicken with salt and pepper, sear until golden',
-            'Remove chicken, deglaze pan with wine',
-            'Toast Arborio rice until translucent',
-            'Add warm stock gradually, stirring constantly',
-            'Finish with lemon zest, herbs, and butter'
-        ],
-        'enhancements_made': ['Added wine deglazing', 'Used fresh herbs', 'Restaurant-style plating'],
-        'tags': ['gourmet', 'italian-inspired', 'date-night']
-    }
-    
-    # Mock nutrition data
-    test_nutrition = {
-        'nutrition_per_serving': {
-            'calories': 485,
-            'protein': 38,
-            'carbs': 52,
-            'fat': 12,
-            'fiber': 2
+    # Test recipes with different complexities
+    test_recipes = [
+        {
+            'title': 'Simple Grilled Cheese',
+            'ingredients': ['2 slices bread', '1 slice cheese', '1 tbsp butter'],
+            'instructions': ['Butter bread', 'Add cheese', 'Grill until golden'],
+            'complexity': 'Simple'
         },
-        'nutrition_score': 7.5,
-        'health_insights': ['High protein content', 'Balanced macronutrients'],
-        'dietary_tags': ['high-protein']
-    }
+        {
+            'title': 'Beef Wellington',
+            'ingredients': ['2 lb beef tenderloin', 'puff pastry', 'mushroom duxelles', 'prosciutto'],
+            'instructions': ['Sear beef', 'Prepare duxelles', 'Wrap in pastry', 'Bake'],
+            'complexity': 'Gourmet'
+        }
+    ]
     
     evaluator = QualityEvaluator()
     
-    print("Testing quality evaluation...")
-    evaluation = evaluator.evaluate_recipe(test_recipe, test_nutrition)
-    
-    print(f"\n✅ Quality Evaluation Complete!")
-    print(f"Overall Score: {evaluation['score']}/10")
-    print(f"Quality Level: {evaluation['quality_level']}")
-    print(f"Verdict: {evaluation['quality_verdict']}")
-    print(f"Meets Threshold: {evaluation['meets_threshold']}")
-    print(f"Confidence: {evaluation['confidence']}")
-    
-    if evaluation.get('recommendations'):
-        print(f"\n📋 Top Recommendations:")
-        for rec in evaluation['recommendations'][:3]:
-            print(f"  • {rec}")
-    
-    print(f"\n📊 Detailed Scores:")
-    for category, details in evaluation['detailed_scores'].items():
-        if details:
-            print(f"  {category.title()}: {details.get('score', 'N/A')}/10")
+    for recipe in test_recipes:
+        complexity = recipe.pop('complexity')
+        print(f"\n{'='*50}")
+        print(f"Testing {complexity} Recipe: {recipe['title']}")
+        print(f"{'='*50}")
+        
+        evaluation = evaluator.evaluate_recipe(recipe, None, None, complexity)
+        
+        print(f"\n✅ Quality Evaluation Complete!")
+        print(f"Overall Score: {evaluation['score']}/10")
+        print(f"Quality Level: {evaluation['quality_level']}")
+        print(f"Complexity Evaluated: {evaluation['complexity_evaluated']}")
+        print(f"Verdict: {evaluation['quality_verdict']}")
+        print(f"Meets Threshold: {evaluation['meets_threshold']}")
+        print(f"Confidence: {evaluation['confidence']}")
+        
+        if evaluation.get('recommendations'):
+            print(f"\n📋 Top Recommendations:")
+            for rec in evaluation['recommendations'][:3]:
+                print(f"  • {rec}")
+        
+        print(f"\n📊 Detailed Scores:")
+        for category, details in evaluation['detailed_scores'].items():
+            if details:
+                print(f"  {category.title()}: {details.get('score', 'N/A')}/10")
