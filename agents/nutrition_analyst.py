@@ -37,14 +37,14 @@ class NutritionAnalyst:
         if self.has_edamam_api:
             print("✅ Edamam Nutrition API initialized")
         else:
-            print("⚠️  No Edamam API credentials - using fallback methods")
+            print("⚠️  No Edamam API credentials - using AI-powered analysis")
         
         # Load basic nutrition database for fallback
         self.ingredient_nutrition_db = self._load_basic_nutrition_db()
     
     def analyze_nutrition(self, recipe: Dict) -> Dict:
         """
-        Analyze nutritional content of a recipe using real APIs when available
+        Analyze nutritional content of a recipe using AI-powered estimation as primary method
         """
         
         print(f"🥗 Analyzing nutrition for: {recipe.get('title', 'Unknown Recipe')}")
@@ -55,23 +55,27 @@ class NutritionAnalyst:
             
             nutrition_data = None
             
-            # Approach 1: Try Edamam Nutrition API (most accurate)
-            if self.has_edamam_api:
-                nutrition_data = self._analyze_with_edamam(ingredients, servings)
+            # Approach 1: Use AI-powered nutrition estimation (PRIMARY METHOD)
+            print("🤖 Using AI-powered nutrition estimation...")
+            nutrition_data = self._analyze_with_ai_enhanced(recipe)
             
-            # Approach 2: Use built-in ingredient database
+            # Approach 2: Try Edamam Nutrition API (disabled for now)
+            # if not nutrition_data and self.has_edamam_api:
+            #     nutrition_data = self._analyze_with_edamam(ingredients, servings)
+            
+            # Approach 3: Use built-in ingredient database (fallback)
             if not nutrition_data:
                 nutrition_data = self._analyze_with_database(ingredients, servings)
             
-            # Approach 3: AI-powered estimation (fallback)
+            # Approach 4: Basic estimation (final fallback)
             if not nutrition_data:
-                nutrition_data = self._analyze_with_ai(recipe)
+                nutrition_data = self._create_basic_nutrition_estimate(recipe)
             
             # Calculate additional metrics
             enhanced_nutrition = self._calculate_nutrition_metrics(nutrition_data, recipe)
             
             # Generate health insights
-            health_insights = self._generate_health_insights(enhanced_nutrition, recipe)
+            health_insights = self._generate_health_insights_enhanced(enhanced_nutrition, recipe)
             
             return {
                 'nutrition_per_serving': enhanced_nutrition,
@@ -82,15 +86,237 @@ class NutritionAnalyst:
                 'dietary_tags': self._generate_dietary_tags(enhanced_nutrition),
                 'nutrition_score': self._calculate_nutrition_score(enhanced_nutrition),
                 'recommendations': self._generate_recommendations(enhanced_nutrition, recipe),
-                'api_used': self.has_edamam_api
+                'api_used': False  # Always false now since we're using AI
             }
             
         except Exception as e:
             print(f"⚠️  Nutrition analysis failed: {str(e)}")
             return self._create_fallback_nutrition(recipe)
     
+    def _analyze_with_ai_enhanced(self, recipe: Dict) -> Dict:
+        """Enhanced AI nutrition analysis with detailed consideration"""
+        
+        print("  🤖 Using enhanced AI nutrition estimation...")
+        
+        # Prepare comprehensive recipe data for AI analysis
+        recipe_context = {
+            'title': recipe.get('title', 'Unknown'),
+            'servings': recipe.get('servings', '4'),
+            'ingredients': recipe.get('ingredients', []),
+            'cooking_methods': self._extract_cooking_methods(recipe.get('instructions', [])),
+            'meal_type': recipe.get('meal_type', 'unknown'),
+            'cuisine_type': recipe.get('cuisine_type', 'unknown')
+        }
+        
+        nutrition_prompt = f"""
+Analyze the nutritional content of this recipe and provide detailed estimates per serving:
+
+RECIPE ANALYSIS:
+Title: {recipe_context['title']}
+Servings: {recipe_context['servings']}
+Meal Type: {recipe_context['meal_type']}
+Cooking Methods: {', '.join(recipe_context['cooking_methods']) if recipe_context['cooking_methods'] else 'Various'}
+
+INGREDIENTS TO ANALYZE:
+{self._format_ingredients_for_analysis(recipe_context['ingredients'])}
+
+Please provide comprehensive nutritional estimates considering:
+1. Raw ingredient nutritional values
+2. Cooking method impacts (oil absorption, water loss, etc.)
+3. Realistic portion sizes per serving
+4. Added fats, oils, and seasonings during cooking
+5. Bioavailability changes from cooking processes
+
+Provide estimates in this JSON format:
+{{
+    "calories": number (realistic total per serving),
+    "protein": number (grams per serving),
+    "carbs": number (grams per serving), 
+    "fat": number (grams per serving),
+    "fiber": number (grams per serving),
+    "sugar": number (grams per serving),
+    "sodium": number (mg per serving),
+    "confidence": "high/medium/low",
+    "method": "ai_enhanced_estimation",
+    "analysis_notes": [
+        "Key factors considered in estimation",
+        "Cooking method impacts",
+        "Major calorie contributors"
+    ]
+}}
+
+Be realistic and consider:
+- Cooking oils and fats added during preparation
+- Water content changes from cooking
+- Actual edible portions (bones, peels removed)
+- Reasonable serving sizes for the meal type
+
+Provide your best professional estimation based on culinary and nutritional knowledge.
+"""
+        
+        try:
+            print(f"  🤖 Sending detailed nutrition analysis to Claude...")
+            
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=1200,
+                messages=[{"role": "user", "content": nutrition_prompt}]
+            )
+            
+            nutrition_text = response.content[0].text.strip()
+            print(f"  🤖 Claude nutrition response length: {len(nutrition_text)} characters")
+            
+            # Extract JSON from response
+            json_match = re.search(r'\{.*\}', nutrition_text, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                
+                # Validate and clean the results
+                result = self._validate_ai_nutrition_result(result)
+                
+                print(f"  ✅ AI nutrition estimation complete")
+                print(f"     Calories: {result.get('calories', 'N/A')} per serving")
+                print(f"     Protein: {result.get('protein', 'N/A')}g per serving")
+                print(f"     Confidence: {result.get('confidence', 'medium')}")
+                
+                return result
+            else:
+                print(f"  ❌ Could not extract JSON from AI response")
+                return None
+        
+        except Exception as e:
+            print(f"  ❌ AI nutrition estimation failed: {str(e)}")
+            return None
+    
+    def _extract_cooking_methods(self, instructions: List[str]) -> List[str]:
+        """Extract cooking methods from recipe instructions"""
+        
+        cooking_methods = set()
+        
+        method_keywords = {
+            'sauté': ['sauté', 'sautee', 'pan fry'],
+            'bake': ['bake', 'roast', 'oven'],
+            'boil': ['boil', 'simmer', 'cook in water'],
+            'grill': ['grill', 'bbq', 'barbecue'],
+            'steam': ['steam'],
+            'fry': ['fry', 'deep fry'],
+            'braise': ['braise', 'slow cook'],
+            'broil': ['broil'],
+            'poach': ['poach'],
+            'stir-fry': ['stir fry', 'stir-fry', 'wok']
+        }
+        
+        instructions_text = ' '.join(instructions).lower()
+        
+        for method, keywords in method_keywords.items():
+            if any(keyword in instructions_text for keyword in keywords):
+                cooking_methods.add(method)
+        
+        return list(cooking_methods)
+    
+    def _format_ingredients_for_analysis(self, ingredients: List[str]) -> str:
+        """Format ingredients list for AI analysis"""
+        
+        if not ingredients:
+            return "No ingredients specified"
+        
+        formatted = []
+        for i, ingredient in enumerate(ingredients[:20], 1):  # Limit to first 20 ingredients
+            formatted.append(f"{i}. {ingredient}")
+        
+        if len(ingredients) > 20:
+            formatted.append(f"... and {len(ingredients) - 20} more ingredients")
+        
+        return '\n'.join(formatted)
+    
+    def _validate_ai_nutrition_result(self, result: Dict) -> Dict:
+        """Validate and clean AI nutrition estimation results"""
+        
+        # Ensure all required fields are present and reasonable
+        validated = {
+            'calories': max(0, min(result.get('calories', 400), 2000)),  # Cap at reasonable ranges
+            'protein': max(0, min(result.get('protein', 15), 100)),
+            'carbs': max(0, min(result.get('carbs', 30), 150)), 
+            'fat': max(0, min(result.get('fat', 10), 80)),
+            'fiber': max(0, min(result.get('fiber', 3), 20)),
+            'sugar': max(0, min(result.get('sugar', 5), 50)),
+            'sodium': max(0, min(result.get('sodium', 300), 3000)),
+            'confidence': result.get('confidence', 'medium'),
+            'method': result.get('method', 'ai_enhanced_estimation'),
+            'analysis_notes': result.get('analysis_notes', [])
+        }
+        
+        # Sanity check: calories should roughly match macronutrients
+        calculated_calories = (validated['protein'] * 4) + (validated['carbs'] * 4) + (validated['fat'] * 9)
+        if abs(validated['calories'] - calculated_calories) > validated['calories'] * 0.3:  # 30% tolerance
+            print(f"  ⚠️ Calorie mismatch detected, adjusting...")
+            # Adjust calories to match macronutrients more closely
+            validated['calories'] = round((validated['calories'] + calculated_calories) / 2)
+        
+        return validated
+    
+    def _generate_health_insights_enhanced(self, nutrition: Dict, recipe: Dict) -> List[str]:
+        """Generate enhanced health insights based on nutritional analysis"""
+        
+        insights = []
+        
+        calories = nutrition.get('calories', 0)
+        protein = nutrition.get('protein', 0)
+        fiber = nutrition.get('fiber', 0)
+        sodium = nutrition.get('sodium', 0)
+        fat = nutrition.get('fat', 0)
+        carbs = nutrition.get('carbs', 0)
+        
+        # Meal-type specific calorie insights
+        meal_type = recipe.get('meal_type', '').lower()
+        if meal_type == 'breakfast' and calories < 300:
+            insights.append("Light breakfast - great for weight management")
+        elif meal_type == 'lunch' and 400 <= calories <= 600:
+            insights.append("Well-balanced lunch portion")
+        elif meal_type == 'dinner' and calories > 700:
+            insights.append("Hearty dinner - consider portion control if needed")
+        elif calories < 300:
+            insights.append("Light meal - perfect for calorie-conscious eating")
+        elif calories > 600:
+            insights.append("Substantial meal - great for active individuals")
+        
+        # Protein insights
+        if protein > 25:
+            insights.append("High protein content - excellent for muscle maintenance")
+        elif protein > 15:
+            insights.append("Good protein source - supports daily protein needs")
+        elif protein < 10:
+            insights.append("Lower protein - consider adding protein-rich ingredients")
+        
+        # Fiber insights
+        if fiber > 8:
+            insights.append("High fiber content - supports digestive health")
+        elif fiber > 5:
+            insights.append("Good fiber source - aids in digestion")
+        elif fiber < 3:
+            insights.append("Low fiber - consider adding vegetables or whole grains")
+        
+        # Sodium insights
+        if sodium > 1000:
+            insights.append("Higher sodium content - balance with low-sodium foods")
+        elif sodium > 600:
+            insights.append("Moderate sodium levels - within reasonable range")
+        elif sodium < 300:
+            insights.append("Low sodium - heart-friendly option")
+        
+        # Analysis quality insights
+        analysis_method = nutrition.get('method', '')
+        confidence = nutrition.get('confidence', 'medium')
+        
+        if analysis_method == 'ai_enhanced_estimation' and confidence == 'high':
+            insights.append("Nutrition calculated using advanced AI analysis")
+        elif confidence == 'medium':
+            insights.append("Nutrition estimates based on ingredient analysis")
+        
+        return insights[:4]  # Return top 4 most relevant insights
+    
     def _analyze_with_edamam(self, ingredients: List[str], servings: int) -> Optional[Dict]:
-        """Analyze nutrition using Edamam Nutrition API"""
+        """Analyze nutrition using Edamam Nutrition API (KEPT FOR FUTURE USE)"""
         
         try:
             print("  🔬 Using Edamam Nutrition API...")
@@ -420,7 +646,7 @@ class NutritionAnalyst:
             return 4
     
     def _analyze_with_ai(self, recipe: Dict) -> Dict:
-        """Use AI to estimate nutrition when other methods fail"""
+        """Use AI to estimate nutrition when other methods fail (LEGACY METHOD)"""
         
         print("  🤖 Using AI estimation...")
         
@@ -491,7 +717,7 @@ Base estimates on typical nutritional values for similar dishes.
         return nutrition
     
     def _generate_health_insights(self, nutrition: Dict, recipe: Dict) -> List[str]:
-        """Generate health insights based on nutritional analysis"""
+        """Generate health insights based on nutritional analysis (LEGACY METHOD)"""
         
         insights = []
         
