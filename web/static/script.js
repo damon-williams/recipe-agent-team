@@ -128,17 +128,36 @@ class RecipeGenerator {
         this.bindEvents();
         // Don't load recent recipes on initial page load
         
-        // Track page load
-        this.trackEvent('page_loaded', {
-            timestamp: new Date().toISOString()
+        // Track page load after PostHog is ready
+        this.waitForPostHog(() => {
+            this.trackEvent('page_loaded', {
+                timestamp: new Date().toISOString()
+            });
         });
+    }
+    
+    waitForPostHog(callback) {
+        // Check if PostHog is loaded and ready
+        if (typeof posthog !== 'undefined' && posthog.capture) {
+            callback();
+        } else {
+            // Wait a bit and try again
+            setTimeout(() => this.waitForPostHog(callback), 100);
+        }
     }
     
     trackEvent(eventName, properties = {}) {
         try {
-            if (typeof posthog !== 'undefined') {
+            if (typeof posthog !== 'undefined' && posthog.capture) {
                 posthog.capture(eventName, properties);
                 console.log(`📊 Tracked: ${eventName}`, properties);
+            } else {
+                console.log(`📊 PostHog not ready, queuing: ${eventName}`);
+                // Queue the event to track once PostHog is ready
+                this.waitForPostHog(() => {
+                    posthog.capture(eventName, properties);
+                    console.log(`📊 Tracked (queued): ${eventName}`, properties);
+                });
             }
         } catch (error) {
             console.log('PostHog tracking error:', error);
