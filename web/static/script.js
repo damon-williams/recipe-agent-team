@@ -180,7 +180,7 @@ class RecipeGenerator {
         
         // Modal events
         this.closeModalBtn.addEventListener('click', () => this.closeModal());
-        this.printRecipeBtn.addEventListener('click', () => this.printRecipe());
+        this.printRecipeBtn.addEventListener('click', () => this.printModalRecipe());
         this.recipeModal.addEventListener('click', (e) => {
             if (e.target === this.recipeModal) this.closeModal();
         });
@@ -815,7 +815,47 @@ class RecipeGenerator {
         }, 250);
     }
     
-    getPrintStyles() {
+    printModalRecipe() {
+        // Track print action for modal recipe
+        this.trackEvent('modal_recipe_printed', {
+            timestamp: new Date().toISOString()
+        });
+        
+        // Create a clean print version of the modal content
+        const modalContent = this.modalRecipeContent.cloneNode(true);
+        const modalTitle = this.modalRecipeTitle.textContent;
+        
+        // Create a new window for printing
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>${modalTitle} - Print</title>
+                <style>
+                    ${this.getPrintStyles()}
+                </style>
+            </head>
+            <body>
+                <div class="print-container">
+                    <div class="recipe-header">
+                        <h1 class="recipe-title">${modalTitle}</h1>
+                    </div>
+                    ${modalContent.innerHTML}
+                </div>
+            </body>
+            </html>
+        `);
+        
+        printWindow.document.close();
+        printWindow.focus();
+        
+        // Wait for content to load, then print
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+        }, 250);
+    }
         return `
             @page {
                 margin: 0.75in;
