@@ -275,8 +275,12 @@ class RecipeGenerator {
             if (filters.difficulty && filters.difficulty !== 'all') params.append('difficulty', filters.difficulty);
             if (filters.min_quality > 0) params.append('min_quality', filters.min_quality);
             
+            console.log('API URL:', `/api/recipes?${params.toString()}`); // Debug log to see the actual URL
+            
             const response = await fetch(`/api/recipes?${params.toString()}`);
             const data = await response.json();
+            
+            console.log('API Response:', data); // Debug log to see what we get back
             
             if (data.success && data.recipes.length > 0) {
                 const html = data.recipes.map(recipe => `
