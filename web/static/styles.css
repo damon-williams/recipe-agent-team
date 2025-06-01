@@ -99,6 +99,78 @@ body {
     border-color: #667eea;
 }
 
+.complexity-control {
+    display: flex;
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 4px;
+    border: 2px solid #e1e5e9;
+    position: relative;
+    overflow: hidden;
+}
+
+.complexity-radio {
+    display: none;
+}
+
+.complexity-option {
+    flex: 1;
+    padding: 12px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-radius: 8px;
+    position: relative;
+    z-index: 1;
+    margin: 0 2px;
+}
+
+.complexity-option:first-child {
+    margin-left: 0;
+}
+
+.complexity-option:last-child {
+    margin-right: 0;
+}
+
+.complexity-text {
+    display: block;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #666;
+    transition: color 0.3s ease;
+}
+
+.complexity-description {
+    display: block;
+    font-size: 0.8rem;
+    color: #999;
+    margin-top: 2px;
+    transition: color 0.3s ease;
+}
+
+.complexity-radio:checked + .complexity-option {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.complexity-radio:checked + .complexity-option .complexity-text {
+    color: white;
+}
+
+.complexity-radio:checked + .complexity-option .complexity-description {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.complexity-option:hover:not(.complexity-radio:checked + .complexity-option) {
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.complexity-option:hover:not(.complexity-radio:checked + .complexity-option) .complexity-text {
+    color: #667eea;
+}
+
 .generate-btn {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -964,5 +1036,29 @@ body {
     .complexity-select {
         background-size: 16px;
         padding-right: 40px;
+    }
+    
+    .complexity-control {
+        flex-direction: column;
+        padding: 8px;
+    }
+    
+    .complexity-option {
+        margin: 2px 0;
+        padding: 10px 12px;
+    }
+    
+    .complexity-option:first-child,
+    .complexity-option:last-child {
+        margin-left: 0;
+        margin-right: 0;
+    }
+    
+    .complexity-text {
+        font-size: 0.9rem;
+    }
+    
+    .complexity-description {
+        font-size: 0.75rem;
     }
 }

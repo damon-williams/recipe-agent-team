@@ -6,7 +6,7 @@ class RecipeGenerator {
     
     init() {
         this.recipeInput = document.getElementById('recipeInput');
-        this.complexitySelect = document.getElementById('complexitySelect');
+        this.complexityControl = document.getElementById('complexityControl');
         this.generateBtn = document.getElementById('generateBtn');
         this.loading = document.getElementById('loading');
         this.progressLog = document.getElementById('progressLog');
@@ -60,7 +60,8 @@ class RecipeGenerator {
     
     async generateRecipe() {
         const request = this.recipeInput.value.trim();
-        const complexity = this.complexitySelect.value;
+        const complexityRadio = this.complexityControl.querySelector('input[name="complexity"]:checked');
+        const complexity = complexityRadio ? complexityRadio.value : 'Medium';
         
         if (!request) {
             this.showError('Please enter a recipe request');

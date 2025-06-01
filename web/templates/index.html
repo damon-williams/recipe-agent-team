@@ -22,12 +22,26 @@
             </div>
 
             <div class="input-group">
-                <label for="complexitySelect">Desired Complexity Level:</label>
-                <select id="complexitySelect" class="complexity-select">
-                    <option value="Easy">Easy - Simple techniques and common ingredients</option>
-                    <option value="Medium" selected>Medium - Moderate skill with some advanced techniques</option>
-                    <option value="High">High - Complex techniques and gourmet ingredients</option>
-                </select>
+                <label for="complexityControl">Desired Complexity Level:</label>
+                <div class="complexity-control" id="complexityControl">
+                    <input type="radio" id="complexityEasy" name="complexity" value="Easy" class="complexity-radio">
+                    <label for="complexityEasy" class="complexity-option">
+                        <span class="complexity-text">Easy</span>
+                        <span class="complexity-description">Simple techniques</span>
+                    </label>
+                    
+                    <input type="radio" id="complexityMedium" name="complexity" value="Medium" class="complexity-radio" checked>
+                    <label for="complexityMedium" class="complexity-option">
+                        <span class="complexity-text">Medium</span>
+                        <span class="complexity-description">Moderate skill</span>
+                    </label>
+                    
+                    <input type="radio" id="complexityHigh" name="complexity" value="High" class="complexity-radio">
+                    <label for="complexityHigh" class="complexity-option">
+                        <span class="complexity-text">High</span>
+                        <span class="complexity-description">Advanced techniques</span>
+                    </label>
+                </div>
             </div>
 
             <button id="generateBtn" class="generate-btn">
