@@ -65,7 +65,61 @@ class RecipeGenerator {
             "🌿 Fresh herbs should be added at the end to preserve their flavor.",
             "⏰ Resting meat after cooking allows juices to redistribute evenly.",
             "🧈 Butter burns at a lower temperature than most cooking oils.",
-            "🥄 A pinch of salt can enhance sweetness in desserts!"
+            "🥄 A pinch of salt can enhance sweetness in desserts!",
+            "🍇 Grapes explode when you put them in the microwave.",
+            "🥖 French baguettes are required by law to contain only 4 ingredients.",
+            "🦞 Lobsters were once considered prison food for the poor.",
+            "🍓 Strawberries have more vitamin C than oranges!",
+            "🥬 Lettuce belongs to the sunflower family.",
+            "🌰 Chestnuts are the only nuts that contain vitamin C.",
+            "🍊 Orange peels contain more fiber than the fruit itself.",
+            "🥦 Broccoli contains more protein per calorie than steak.",
+            "🍪 The chocolate chip cookie was invented by accident.",
+            "🌮 Cilantro tastes like soap to 14% of people due to genetics.",
+            "🥝 Kiwi fruits contain more vitamin C than oranges.",
+            "🧅 Onions make you cry less when they're cold.",
+            "🍰 Vanilla is the second most expensive spice after saffron.",
+            "🥓 Bacon was used as currency in Colonial America.",
+            "🍉 Watermelons are 91% water and related to cucumbers.",
+            "🌶️ Birds can't taste spicy food because they lack heat receptors.",
+            "🥨 Pretzels were originally created by monks as rewards for prayers.",
+            "🧄 Elephant garlic isn't actually garlic - it's a type of leek.",
+            "🍯 It takes 556 worker bees to gather 1 pound of honey.",
+            "🥔 Potatoes were the first vegetable grown in space.",
+            "🍋 Meyer lemons are actually a cross between lemons and oranges.",
+            "🥩 Wagyu beef comes from cows that are massaged and fed beer.",
+            "🌽 Popcorn is over 5,000 years old!",
+            "🧀 Roquefort cheese can only be made in caves in France.",
+            "🥭 Mangoes are the most consumed fruit in the world.",
+            "🍄 Some mushrooms glow in the dark naturally.",
+            "🥑 Avocados are toxic to dogs and cats.",
+            "🍎 There are over 7,500 varieties of apples worldwide.",
+            "🥥 Coconuts aren't nuts - they're actually seeds.",
+            "🌶️ The Carolina Reaper is the world's hottest pepper.",
+            "🧄 Garlic can be used as a natural antibiotic.",
+            "🍯 Honey has natural antibacterial properties.",
+            "🥜 Almonds are actually seeds, not nuts.",
+            "🍊 Orange vegetables get their color from beta-carotene.",
+            "🥬 Iceberg lettuce is 95% water.",
+            "🍓 Strawberries are the only fruit with seeds on the outside.",
+            "🧅 Cutting onions under running water reduces tears.",
+            "🥕 Baby carrots are just regular carrots cut into small pieces.",
+            "🍋 Lemons were once more valuable than gold.",
+            "🥔 Green potatoes are toxic and shouldn't be eaten.",
+            "🌽 Each kernel of corn is a separate fruit.",
+            "🥦 Broccoli, cauliflower, and cabbage are all the same species.",
+            "🍄 Mushrooms have their own immune system.",
+            "🧀 Cheese is the most stolen food in the world.",
+            "🥩 Dry-aging beef can take up to 120 days.",
+            "🐟 Salmon get their pink color from eating shrimp.",
+            "🍳 Brown eggs aren't healthier - shell color depends on hen breed.",
+            "🧂 Himalayan pink salt is actually mined in Pakistan.",
+            "🌿 Basil repels mosquitoes naturally.",
+            "🥄 Wooden spoons don't conduct heat like metal ones.",
+            "🔥 Capsaicin is measured in Scoville Heat Units.",
+            "🧊 Adding salt to ice makes it melt faster and get colder.",
+            "🥘 Cast iron pans can add iron to your food.",
+            "⏰ Food tastes different on airplanes due to low humidity and pressure."
         ];
         
         this.factInterval = null;
@@ -363,11 +417,6 @@ class RecipeGenerator {
             </div>
             ` : ''}
             
-            <div class="tags">
-                ${recipe.tags ? recipe.tags.map(tag => `<span class="tag">${tag}</span>`).join('') : ''}
-                ${nutrition?.dietary_tags ? nutrition.dietary_tags.map(tag => `<span class="tag">${tag}</span>`).join('') : ''}
-            </div>
-            
             <div class="generation-stats">
                 <p><strong>Generated in ${data.generation_time} seconds with ${data.iterations} iteration${data.iterations > 1 ? 's' : ''}</strong></p>
                 <p style="margin-top: 10px; color: #666;">Complexity: ${recipe.difficulty}</p>
@@ -582,11 +631,6 @@ class RecipeGenerator {
                 </div>
             </div>
             ` : ''}
-            
-            <div class="tags">
-                ${recipe.tags ? recipe.tags.map(tag => `<span class="tag">${tag}</span>`).join('') : ''}
-                ${recipe.dietary_tags ? recipe.dietary_tags.map(tag => `<span class="tag">${tag}</span>`).join('') : ''}
-            </div>
             
             <div class="generation-stats">
                 <p>Generated ${recipe.iterations_count} iteration${recipe.iterations_count > 1 ? 's' : ''} • Views: ${recipe.views_count || 0}</p>

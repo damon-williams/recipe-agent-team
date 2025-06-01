@@ -214,22 +214,42 @@ body {
 .loading {
     display: none;
     text-align: center;
-    padding: 40px;
+    padding: 20px 40px 40px;
+}
+
+.loading-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.loading-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: #333;
+}
+
+.loading p {
+    margin: 0 0 20px;
+    color: #666;
+    font-size: 0.95rem;
 }
 
 .loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #667eea;
+    width: 32px;
+    height: 32px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #667eea;
     border-radius: 50%;
     animation: spin 1s linear infinite;
-    margin: 0 auto 20px;
+    flex-shrink: 0;
 }
 
 .cooking-facts-container {
     display: none;
-    margin: 30px auto 20px;
+    margin: 20px auto 25px;
     max-width: 500px;
     height: 60px;
     position: relative;
@@ -1134,7 +1154,7 @@ body {
     }
     
     .cooking-facts-container {
-        margin: 20px auto 15px;
+        margin: 15px auto 20px;
         max-width: 90%;
         height: 80px;
     }
@@ -1143,5 +1163,23 @@ body {
         padding: 12px 20px;
         font-size: 0.9rem;
         border-radius: 20px;
+    }
+    
+    .loading {
+        padding: 15px 20px 30px;
+    }
+    
+    .loading-header {
+        gap: 12px;
+    }
+    
+    .loading-header h3 {
+        font-size: 1.1rem;
+    }
+    
+    .loading-spinner {
+        width: 28px;
+        height: 28px;
+        border-width: 2px;
     }
 }
