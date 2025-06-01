@@ -172,6 +172,14 @@ HIGH COMPLEXITY GUIDELINES:
         
         print(f"🔍 Validating recipe data for {complexity} complexity...")
         
+        # Map backend complexity to frontend complexity for consistency
+        frontend_complexity_mapping = {
+            'Easy': 'Simple',
+            'Medium': 'Medium', 
+            'High': 'Gourmet'
+        }
+        frontend_complexity = frontend_complexity_mapping.get(complexity, complexity)
+        
         # Required fields with defaults
         validated = {
             "title": recipe_data.get("title", f"Recipe for {original_request}"),
@@ -180,7 +188,7 @@ HIGH COMPLEXITY GUIDELINES:
             "cook_time": recipe_data.get("cook_time", "Unknown"),
             "total_time": recipe_data.get("total_time", "Unknown"),
             "servings": str(recipe_data.get("servings", "4")),
-            "difficulty": complexity,  # Use the requested complexity
+            "difficulty": frontend_complexity,  # Use frontend complexity for consistency
             "ingredients": recipe_data.get("ingredients", []),
             "instructions": recipe_data.get("instructions", []),
             "tags": recipe_data.get("tags", []),
@@ -189,7 +197,8 @@ HIGH COMPLEXITY GUIDELINES:
             "success": True,
             "agent": "recipe_generator",
             "original_request": original_request,
-            "requested_complexity": complexity
+            "requested_complexity": complexity,
+            "frontend_complexity": frontend_complexity
         }
         
         # Clean and validate ingredients
@@ -208,14 +217,14 @@ HIGH COMPLEXITY GUIDELINES:
         
         # Ensure we have at least some tags
         if not validated["tags"]:
-            complexity_tag = complexity.lower()
-            validated["tags"] = ["homemade", "recipe", complexity_tag]
-            print(f"⚠️ No tags found, using defaults including '{complexity_tag}'")
+            frontend_complexity_tag = frontend_complexity.lower()
+            validated["tags"] = ["homemade", "recipe", frontend_complexity_tag]
+            print(f"⚠️ No tags found, using defaults including '{frontend_complexity_tag}'")
         else:
             # Add complexity tag if not present
-            complexity_tag = complexity.lower()
-            if complexity_tag not in [tag.lower() for tag in validated["tags"]]:
-                validated["tags"].append(complexity_tag)
+            frontend_complexity_tag = frontend_complexity.lower()
+            if frontend_complexity_tag not in [tag.lower() for tag in validated["tags"]]:
+                validated["tags"].append(frontend_complexity_tag)
             print(f"✅ Tags validated: {validated['tags']}")
         
         print(f"✅ Recipe validation complete for '{validated['title']}'")

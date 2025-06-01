@@ -82,13 +82,11 @@ def generate_recipe():
                 'title': result['recipe'].get('title'),
                 'description': result['recipe'].get('description'),
                 'original_request': user_request,
-                'complexity': complexity,  # Store the frontend complexity value
-                'backend_complexity': backend_complexity,  # Store the backend complexity value
                 'prep_time': result['recipe'].get('prep_time'),
                 'cook_time': result['recipe'].get('cook_time'),
                 'total_time': result['recipe'].get('total_time'),
                 'servings': result['recipe'].get('servings'),
-                'difficulty': result['recipe'].get('difficulty'),
+                'difficulty': complexity,  # Store the frontend complexity (Simple/Medium/Gourmet) in existing difficulty field
                 'ingredients': result['recipe'].get('ingredients', []),
                 'instructions': result['recipe'].get('instructions', []),
                 'tags': result['recipe'].get('tags', []),

@@ -110,13 +110,8 @@ class RecipeGenerator {
         // Show the recent recipes section with a smooth reveal
         this.recentRecipesSection.style.display = 'block';
         
-        // Smooth scroll to show the new section after a brief delay
-        setTimeout(() => {
-            this.recentRecipesSection.scrollIntoView({ 
-                behavior: 'smooth', 
-                block: 'start' 
-            });
-        }, 500);
+        // Do NOT auto-scroll to the recent recipes section
+        // Let the user stay focused on their newly generated recipe
     }
     
     showLoading() {
