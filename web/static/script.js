@@ -32,6 +32,7 @@ class RecipeGenerator {
         this.modalRecipeContent = document.getElementById('modalRecipeContent');
         this.closeModalBtn = document.getElementById('closeModal');
         this.printRecipeBtn = document.getElementById('printRecipeBtn');
+        this.viewAllRecipesLink = document.getElementById('viewAllRecipesLink');
         
         // Cooking facts for loading entertainment
         this.cookingFacts = [
@@ -94,6 +95,12 @@ class RecipeGenerator {
         this.recipeModal.addEventListener('click', (e) => {
             if (e.target === this.recipeModal) this.closeModal();
         });
+        
+        // View all recipes link
+        this.viewAllRecipesLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.showAllRecipes();
+        });
     }
     
     async generateRecipe() {
@@ -152,6 +159,25 @@ class RecipeGenerator {
         // Let the user stay focused on their newly generated recipe
     }
     
+    showAllRecipes() {
+        // Show recent recipes section if not already visible
+        if (!this.hasGeneratedFirstRecipe) {
+            this.hasGeneratedFirstRecipe = true;
+            this.showRecentRecipesSection();
+        }
+        
+        // Load recipes and scroll to them
+        this.loadRecentRecipes();
+        
+        // Smooth scroll to the recipes section
+        setTimeout(() => {
+            this.recentRecipesSection.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start' 
+            });
+        }, 100);
+    }
+    
     showLoading() {
         this.generateBtn.disabled = true;
         this.generateBtn.textContent = 'Generating...';
@@ -172,14 +198,16 @@ class RecipeGenerator {
         // Show the container
         this.cookingFactsContainer.style.display = 'block';
         
-        // Start with the first fact
-        this.currentFactIndex = 0;
-        this.showCookingFact();
-        
-        // Set interval to rotate facts every 3.5 seconds
-        this.factInterval = setInterval(() => {
+        // Wait 2 seconds before showing the first fact
+        setTimeout(() => {
+            this.currentFactIndex = 0;
             this.showCookingFact();
-        }, 3500);
+            
+            // Set interval to rotate facts every 3.5 seconds
+            this.factInterval = setInterval(() => {
+                this.showCookingFact();
+            }, 3500);
+        }, 2000);
     }
     
     stopCookingFacts() {

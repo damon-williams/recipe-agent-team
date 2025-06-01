@@ -134,18 +134,43 @@ def generate_recipe():
 
 @app.route('/api/recipes', methods=['GET'])
 def get_recipes():
-    print("About to query recipes")
+    print("About to query recipes with filters")
 
     try:
-        # Optional: get limit param, default to 10
+        # Get parameters from request
         limit = int(request.args.get("limit", 10))
+        search = request.args.get("search", "").strip()
+        meal_type = request.args.get("meal_type", "").strip()
+        difficulty = request.args.get("difficulty", "").strip()
         
-        print("About to query recipes")
-        # Fetch rows from Supabase
-        result = supabase.table("recipes").select("*").order("created_at", desc=True).limit(limit).execute()
+        print(f"Filter parameters: limit={limit}, search='{search}', meal_type='{meal_type}', difficulty='{difficulty}'")
+        
+        # Start with base query
+        query = supabase.table("recipes").select("*")
+        
+        # Apply search filter if provided
+        if search:
+            print(f"Applying search filter: {search}")
+            # Search in title and description
+            query = query.or_(f"title.ilike.%{search}%,description.ilike.%{search}%")
+        
+        # Apply meal type filter if provided
+        if meal_type and meal_type != "all":
+            print(f"Applying meal_type filter: {meal_type}")
+            query = query.eq("meal_type", meal_type)
+        
+        # Apply difficulty filter if provided
+        if difficulty and difficulty != "all":
+            print(f"Applying difficulty filter: {difficulty}")
+            query = query.eq("difficulty", difficulty)
+        
+        # Apply ordering and limit
+        query = query.order("created_at", desc=True).limit(limit)
+        
+        print("Executing query...")
+        result = query.execute()
 
-        # Log and return the results
-        print("Done querying recipes")
+        print(f"Query returned {len(result.data)} recipes")
 
         return jsonify({
             "success": True,
