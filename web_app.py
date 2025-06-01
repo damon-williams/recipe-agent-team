@@ -51,14 +51,20 @@ def generate_recipe():
     try:
         data = request.get_json()
         user_request = data.get('recipe_request', '').strip()
+        complexity = data.get('complexity', 'Medium')  # Default to Medium if not provided
 
         if not user_request:
             return jsonify({'error': 'Recipe request is required'}), 400
 
-        print(f"🌐 Received request: {user_request}")
+        # Validate complexity level
+        valid_complexity_levels = ['Easy', 'Medium', 'High']
+        if complexity not in valid_complexity_levels:
+            complexity = 'Medium'  # Fallback to Medium for invalid values
+
+        print(f"🌐 Received request: {user_request} (Complexity: {complexity})")
 
         start_time = time.time()
-        result = recipe_team.generate_recipe(user_request)
+        result = recipe_team.generate_recipe(user_request, complexity)
         generation_time = int(time.time() - start_time)
 
         if result.get('success'):
@@ -66,6 +72,7 @@ def generate_recipe():
                 'title': result['recipe'].get('title'),
                 'description': result['recipe'].get('description'),
                 'original_request': user_request,
+                'complexity': complexity,  # Store the requested complexity
                 'prep_time': result['recipe'].get('prep_time'),
                 'cook_time': result['recipe'].get('cook_time'),
                 'total_time': result['recipe'].get('total_time'),
@@ -101,7 +108,8 @@ def generate_recipe():
                 'quality': result.get('quality'),
                 'iterations': result.get('iterations'),
                 'generation_time': generation_time,
-                'process_log': result.get('process_log', [])
+                'process_log': result.get('process_log', []),
+                'complexity_requested': complexity
             })
 
         return jsonify({

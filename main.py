@@ -31,7 +31,7 @@ class RecipeAgentTeam:
         
         print("✅ All agents initialized successfully!")
     
-    def generate_recipe(self, user_request: str) -> Dict:
+    def generate_recipe(self, user_request: str, complexity: str = "Medium") -> Dict:
         """
         Main recipe generation pipeline using all AI agents
         """
@@ -40,14 +40,14 @@ class RecipeAgentTeam:
         process_log = []
         
         try:
-            print(f"\n🎯 Starting recipe generation for: '{user_request}'")
-            process_log.append(f"🎯 Request: {user_request}")
+            print(f"\n🎯 Starting recipe generation for: '{user_request}' (Complexity: {complexity})")
+            process_log.append(f"🎯 Request: {user_request} (Complexity: {complexity})")
             
-            # Step 1: Generate base recipe
+            # Step 1: Generate base recipe with complexity consideration
             process_log.append("🤖 Recipe Generator: Creating base recipe...")
             print("🤖 Step 1: Generating base recipe...")
             
-            base_recipe = self.generator.create_recipe(user_request)
+            base_recipe = self.generator.create_recipe(user_request, complexity)
             
             if not base_recipe.get('success'):
                 return {
@@ -56,7 +56,10 @@ class RecipeAgentTeam:
                     'process_log': process_log
                 }
             
-            process_log.append(f"✅ Generated: {base_recipe.get('title', 'Unknown Recipe')}")
+            # Add complexity info to the recipe
+            base_recipe['requested_complexity'] = complexity
+            
+            process_log.append(f"✅ Generated: {base_recipe.get('title', 'Unknown Recipe')} ({complexity} complexity)")
             
             # Step 2: Research cooking inspiration
             inspiration_data = None
@@ -80,18 +83,18 @@ class RecipeAgentTeam:
             else:
                 process_log.append("⏰ Skipping research due to time constraints")
             
-            # Step 3: Enhance the recipe
+            # Step 3: Enhance the recipe (complexity-aware)
             enhanced_recipe = base_recipe
             if time.time() - start_time < self.timeout_seconds - 10:  # Time check
                 try:
                     process_log.append("📝 Recipe Enhancer: Adding creative improvements...")
                     print("📝 Step 3: Enhancing recipe...")
                     
-                    enhanced_recipe = self.enhancer.enhance_recipe(base_recipe, inspiration_data)
+                    enhanced_recipe = self.enhancer.enhance_recipe(base_recipe, inspiration_data, complexity)
                     
                     enhancements = enhanced_recipe.get('enhancements_made', [])
                     if enhancements:
-                        process_log.append(f"✅ Applied {len(enhancements)} enhancements")
+                        process_log.append(f"✅ Applied {len(enhancements)} {complexity.lower()}-level enhancements")
                     else:
                         process_log.append("✅ Recipe enhanced successfully")
                     
@@ -125,7 +128,7 @@ class RecipeAgentTeam:
                 process_log.append("⏰ Skipping nutrition analysis due to time constraints")
                 nutrition_data = self._create_fallback_nutrition(enhanced_recipe)
             
-            # Step 5: Evaluate quality
+            # Step 5: Evaluate quality (complexity-aware)
             quality_data = None
             if time.time() - start_time < self.timeout_seconds - 5:  # Time check
                 try:
@@ -135,12 +138,13 @@ class RecipeAgentTeam:
                     quality_data = self.quality_evaluator.evaluate_recipe(
                         enhanced_recipe, 
                         nutrition_data, 
-                        inspiration_data
+                        inspiration_data,
+                        complexity
                     )
                     
                     score = quality_data.get('score', 0)
                     quality_level = quality_data.get('quality_level', 'Unknown')
-                    process_log.append(f"✅ Quality Score: {score}/10 ({quality_level})")
+                    process_log.append(f"✅ Quality Score: {score}/10 ({quality_level}) for {complexity} complexity")
                     
                 except Exception as e:
                     print(f"⚠️ Quality evaluation failed: {str(e)}")
@@ -156,6 +160,7 @@ class RecipeAgentTeam:
             
             print(f"🎉 Recipe generation complete!")
             print(f"   Title: {enhanced_recipe.get('title', 'Unknown')}")
+            print(f"   Complexity: {complexity}")
             print(f"   Quality: {quality_data.get('score', 'N/A')}/10")
             print(f"   Time: {total_time}s")
             
@@ -167,7 +172,8 @@ class RecipeAgentTeam:
                 'iterations': 1,
                 'process_log': process_log,
                 'generation_time': total_time,
-                'inspiration_used': inspiration_data is not None
+                'inspiration_used': inspiration_data is not None,
+                'complexity_requested': complexity
             }
             
         except Exception as e:
@@ -257,13 +263,15 @@ if __name__ == "__main__":
     team = RecipeAgentTeam()
     
     test_request = "healthy chicken stir fry"
-    print(f"\n🧪 Testing full pipeline with: '{test_request}'")
+    test_complexity = "High"
+    print(f"\n🧪 Testing full pipeline with: '{test_request}' (Complexity: {test_complexity})")
     
-    result = team.generate_recipe(test_request)
+    result = team.generate_recipe(test_request, test_complexity)
     
     print(f"\n📊 Pipeline Results:")
     print(f"Success: {result.get('success')}")
     print(f"Recipe: {result.get('recipe', {}).get('title', 'N/A')}")
+    print(f"Complexity: {result.get('complexity_requested', 'N/A')}")
     print(f"Quality: {result.get('quality', {}).get('score', 'N/A')}/10")
     print(f"Time: {result.get('generation_time', 'N/A')}s")
     print(f"Inspiration Used: {result.get('inspiration_used', False)}")

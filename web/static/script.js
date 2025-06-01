@@ -6,6 +6,7 @@ class RecipeGenerator {
     
     init() {
         this.recipeInput = document.getElementById('recipeInput');
+        this.complexitySelect = document.getElementById('complexitySelect');
         this.generateBtn = document.getElementById('generateBtn');
         this.loading = document.getElementById('loading');
         this.progressLog = document.getElementById('progressLog');
@@ -59,6 +60,8 @@ class RecipeGenerator {
     
     async generateRecipe() {
         const request = this.recipeInput.value.trim();
+        const complexity = this.complexitySelect.value;
+        
         if (!request) {
             this.showError('Please enter a recipe request');
             return;
@@ -73,7 +76,10 @@ class RecipeGenerator {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ recipe_request: request })
+                body: JSON.stringify({ 
+                    recipe_request: request,
+                    complexity: complexity 
+                })
             });
             
             const data = await response.json();
