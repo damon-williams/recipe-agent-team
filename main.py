@@ -522,10 +522,7 @@ class RecipeAgentTeam:
             quality_evaluator = QualityEvaluator()
             
             # Process directly
-            result = self.queue._run_pipeline(
-                task, generator, enhancer, researcher, 
-                nutrition_analyst, quality_evaluator
-            )
+            result = self.queue._run_minimal_pipeline(task)
             
             return result
             
