@@ -234,8 +234,10 @@ def get_recipe_by_id(recipe_id):
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    """Health check endpoint with queue stats"""
+    """Health check endpoint with detailed queue diagnostics"""
     queue_stats = {}
+    worker_diagnostics = {}
+    
     if recipe_team and hasattr(recipe_team, 'queue'):
         with recipe_team.queue.lock:
             queue_stats = {
@@ -244,6 +246,19 @@ def health():
                 'total_tasks': len(recipe_team.queue.tasks),
                 'queue_size': recipe_team.queue.queue.qsize() if hasattr(recipe_team.queue.queue, 'qsize') else 'unknown'
             }
+            
+            # CRITICAL: Check if worker thread is alive
+            worker_diagnostics = {
+                'worker_thread_exists': recipe_team.queue.worker_thread is not None,
+                'worker_thread_alive': recipe_team.queue.worker_thread.is_alive() if recipe_team.queue.worker_thread else False,
+                'worker_running_flag': recipe_team.queue.running,
+                'tasks_by_status': {}
+            }
+            
+            # Count tasks by status
+            for task in recipe_team.queue.tasks.values():
+                status = task.status.value
+                worker_diagnostics['tasks_by_status'][status] = worker_diagnostics['tasks_by_status'].get(status, 0) + 1
     
     return jsonify({
         'status': 'healthy',
@@ -251,8 +266,49 @@ def health():
         'timestamp': datetime.now().isoformat(),
         'agents_available': recipe_team is not None,
         'database_connected': supabase is not None,
-        'queue_stats': queue_stats
+        'queue_stats': queue_stats,
+        'worker_diagnostics': worker_diagnostics  # NEW: Worker thread diagnostics
     })
+
+# Also add a debug endpoint to restart the worker if needed
+@app.route('/api/debug/restart-worker', methods=['POST'])
+def restart_worker():
+    """Emergency endpoint to restart dead worker thread"""
+    if not recipe_team or not hasattr(recipe_team, 'queue'):
+        return jsonify({'error': 'No queue system available'}), 500
+    
+    try:
+        # Check if worker is dead
+        if recipe_team.queue.worker_thread is None or not recipe_team.queue.worker_thread.is_alive():
+            print("🚨 Worker thread is dead, restarting...")
+            
+            # Stop the old worker
+            recipe_team.queue.running = False
+            
+            # Wait a moment
+            time.sleep(1)
+            
+            # Restart the worker
+            recipe_team.queue.running = True
+            recipe_team.queue._start_worker()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Worker thread restarted',
+                'worker_alive': recipe_team.queue.worker_thread.is_alive()
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': 'Worker thread is already alive',
+                'worker_alive': True
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))

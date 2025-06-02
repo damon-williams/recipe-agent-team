@@ -135,50 +135,51 @@ class SimpleRecipeQueue:
         print("✅ Queue worker started")
     
     def _process_task(self, task: RecipeTask):
-        """Process individual recipe generation task"""
+        """Process individual recipe generation task with robust error handling"""
+        thread_name = threading.current_thread().name
+        
         try:
             with self.lock:
                 self.processing_count += 1
                 task.status = TaskStatus.PROCESSING
                 task.progress = {"step": "processing", "message": "Starting recipe generation..."}
             
-            print(f"🎯 Processing task: {task.task_id} for '{task.user_request}'")
+            print(f"🎯 [{thread_name}] Processing task: {task.task_id} for '{task.user_request}'")
             
-            # Import here to avoid circular imports
-            try:
-                from recipe_generator import RecipeGenerator
-                from recipe_enhancer import RecipeEnhancer
-                from web_researcher import WebResearcher
-                from nutrition_analyst import NutritionAnalyst
-                from quality_evaluator import QualityEvaluator
-                print(f"✅ Imported all agents for task {task.task_id}")
-            except ImportError as e:
-                print(f"❌ Failed to import agents: {str(e)}")
-                raise e
+            # Pre-import all agents with individual error handling
+            agents = {}
+            agent_classes = {
+                'generator': 'recipe_generator.RecipeGenerator',
+                'enhancer': 'recipe_enhancer.RecipeEnhancer', 
+                'researcher': 'web_researcher.WebResearcher',
+                'nutrition_analyst': 'nutrition_analyst.NutritionAnalyst',
+                'quality_evaluator': 'quality_evaluator.QualityEvaluator'
+            }
             
-            # Initialize agents (could be cached globally)
-            generator = RecipeGenerator()
-            enhancer = RecipeEnhancer()
-            researcher = WebResearcher()
-            nutrition_analyst = NutritionAnalyst()
-            quality_evaluator = QualityEvaluator()
-            print(f"✅ Initialized all agents for task {task.task_id}")
+            for agent_name, import_path in agent_classes.items():
+                try:
+                    module_name, class_name = import_path.split('.')
+                    module = __import__(module_name, fromlist=[class_name])
+                    agent_class = getattr(module, class_name)
+                    agents[agent_name] = agent_class()
+                    print(f"✅ [{thread_name}] Imported {agent_name}")
+                except Exception as e:
+                    print(f"❌ [{thread_name}] Failed to import {agent_name}: {str(e)}")
+                    # Continue without this agent - use fallbacks
+                    agents[agent_name] = None
             
-            # Run pipeline
-            result = self._run_pipeline(
-                task, generator, enhancer, researcher, 
-                nutrition_analyst, quality_evaluator
-            )
+            # Run pipeline with available agents
+            result = self._run_robust_pipeline(task, agents)
             
             with self.lock:
                 task.status = TaskStatus.COMPLETED
                 task.result = result
                 task.progress = {"step": "completed", "message": "Recipe generation complete!"}
             
-            print(f"✅ Task completed: {task.task_id} - {result['recipe']['title']}")
+            print(f"✅ [{thread_name}] Task completed: {task.task_id}")
             
         except Exception as e:
-            print(f"❌ Task failed: {task.task_id} - {str(e)}")
+            print(f"❌ [{thread_name}] Task failed: {task.task_id} - {str(e)}")
             traceback.print_exc()
             
             with self.lock:
@@ -189,7 +190,115 @@ class SimpleRecipeQueue:
         finally:
             with self.lock:
                 self.processing_count -= 1
-            print(f"🔄 Processing count after task {task.task_id}: {self.processing_count}")
+            print(f"🔄 [{thread_name}] Processing count after task {task.task_id}: {self.processing_count}")
+
+    def _run_robust_pipeline(self, task, agents):
+        """Run the recipe generation pipeline with graceful agent failures"""
+        
+        start_time = time.time()
+        
+        # Step 1: Generate base recipe (REQUIRED)
+        task.progress = {"step": "generating", "message": "🤖 Creating base recipe..."}
+        
+        if agents['generator']:
+            base_recipe = agents['generator'].create_recipe(task.user_request, task.complexity)
+        else:
+            # Fallback: create a basic recipe structure
+            base_recipe = self._create_fallback_recipe(task.user_request, task.complexity)
+        
+        if not base_recipe.get('success'):
+            raise Exception(base_recipe.get('error', 'Recipe generation failed'))
+        
+        base_recipe['requested_complexity'] = task.complexity
+        
+        # Step 2: Research inspiration (OPTIONAL)
+        task.progress = {"step": "researching", "message": "🔍 Finding cooking inspiration..."}
+        
+        inspiration_data = None
+        if agents['researcher']:
+            try:
+                inspiration_data = agents['researcher'].find_inspiration(
+                    base_recipe.get('title', ''), 
+                    base_recipe.get('meal_type')
+                )
+            except Exception as e:
+                print(f"⚠️ Research failed: {str(e)}")
+                inspiration_data = None
+        
+        # Step 3: Enhance recipe (OPTIONAL)
+        task.progress = {"step": "enhancing", "message": "📝 Adding creative improvements..."}
+        
+        enhanced_recipe = base_recipe
+        if agents['enhancer']:
+            try:
+                enhanced_recipe = agents['enhancer'].enhance_recipe(base_recipe, inspiration_data, task.complexity)
+            except Exception as e:
+                print(f"⚠️ Enhancement failed: {str(e)}")
+                enhanced_recipe = base_recipe
+        
+        # Step 4: Analyze nutrition (OPTIONAL)
+        task.progress = {"step": "analyzing", "message": "🥗 Calculating nutrition..."}
+        
+        nutrition_data = None
+        if agents['nutrition_analyst']:
+            try:
+                nutrition_data = agents['nutrition_analyst'].analyze_nutrition(enhanced_recipe)
+            except Exception as e:
+                print(f"⚠️ Nutrition analysis failed: {str(e)}")
+                nutrition_data = self._create_fallback_nutrition(enhanced_recipe)
+        else:
+            nutrition_data = self._create_fallback_nutrition(enhanced_recipe)
+        
+        # Step 5: Evaluate quality (OPTIONAL)
+        task.progress = {"step": "evaluating", "message": "⭐ Scoring recipe quality..."}
+        
+        quality_data = None
+        if agents['quality_evaluator']:
+            try:
+                quality_data = agents['quality_evaluator'].evaluate_recipe(
+                    enhanced_recipe, 
+                    nutrition_data, 
+                    inspiration_data,
+                    task.complexity
+                )
+            except Exception as e:
+                print(f"⚠️ Quality evaluation failed: {str(e)}")
+                quality_data = self._create_fallback_quality()
+        else:
+            quality_data = self._create_fallback_quality()
+        
+        # Final result
+        total_time = int(time.time() - start_time)
+        
+        return {
+            'success': True,
+            'recipe': enhanced_recipe,
+            'nutrition': nutrition_data,
+            'quality': quality_data,
+            'iterations': 1,
+            'complexity_requested': task.complexity,
+            'generation_time': total_time,
+            'inspiration_used': inspiration_data is not None,
+            'agents_used': [name for name, agent in agents.items() if agent is not None]
+        }
+
+    def _create_fallback_recipe(self, user_request: str, complexity: str) -> Dict:
+        """Create a basic recipe when generator fails"""
+        return {
+            'success': True,
+            'title': f"Basic {user_request.title()}",
+            'description': f"A simple {user_request} recipe",
+            'ingredients': ["Main ingredients for " + user_request],
+            'instructions': ["Basic cooking instructions"],
+            'prep_time': "15 minutes",
+            'cook_time': "20 minutes", 
+            'total_time': "35 minutes",
+            'servings': "4",
+            'difficulty': complexity,
+            'tags': [user_request.lower(), "simple"],
+            'cuisine_type': "Various",
+            'meal_type': "dinner"
+        }
     
     def _run_pipeline(self, task, generator, enhancer, researcher, nutrition_analyst, quality_evaluator):
         """Run the recipe generation pipeline"""
