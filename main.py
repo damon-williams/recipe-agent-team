@@ -171,35 +171,6 @@ class SimpleRecipeQueue:
                 # Keep the task in self.tasks so status endpoint can find it
             
             return task_id
-
-    # Also add a debug endpoint to web_app.py to see all tasks:
-
-    @app.route('/api/debug/tasks', methods=['GET'])
-    def debug_tasks():
-        """Debug endpoint to see all tasks in the queue"""
-        if not recipe_team or not hasattr(recipe_team, 'queue'):
-            return jsonify({'error': 'No queue system available'}), 500
-        
-        queue = recipe_team.queue
-        
-        tasks_info = []
-        with queue.lock:
-            for task_id, task in queue.tasks.items():
-                tasks_info.append({
-                    'task_id': task_id,
-                    'status': task.status.value,
-                    'user_request': task.user_request,
-                    'created_at': task.created_at,
-                    'progress': task.progress,
-                    'error': task.error
-                })
-        
-        return jsonify({
-            'total_tasks': len(tasks_info),
-            'tasks': tasks_info,
-            'queue_size': queue.queue.qsize(),
-            'processing_count': queue.processing_count
-        })
     
     def get_task_status(self, task_id: str) -> Dict:
         """Get status of a queued/processing recipe"""
