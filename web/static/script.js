@@ -427,9 +427,30 @@ class RecipeGenerator {
     }
     
     displayRecipe(data) {
-        const recipe = data.recipe;
-        const nutrition = data.nutrition;
-        const quality = data.quality;
+        // Handle both queue result format and direct result format
+        let recipe, nutrition, quality;
+        
+        if (data.result) {
+            // Queue response format
+            recipe = data.result.recipe;
+            nutrition = data.result.nutrition;
+            quality = data.result.quality;
+        } else if (data.recipe) {
+            // Direct response format
+            recipe = data.recipe;
+            nutrition = data.nutrition;
+            quality = data.quality;
+        } else {
+            console.error('Invalid data structure:', data);
+            this.showError('Invalid recipe data received');
+            return;
+        }
+        
+        if (!recipe || !recipe.title) {
+            console.error('Recipe missing or invalid:', recipe);
+            this.showError('Recipe data is incomplete');
+            return;
+        }
         
         const html = `
             <div class="recipe-header">
@@ -447,7 +468,7 @@ class RecipeGenerator {
             <div class="recipe-section">
                 <h2 class="section-title">🥘 Ingredients</h2>
                 <div class="ingredients-grid">
-                    ${recipe.ingredients.map(ingredient => 
+                    ${(recipe.ingredients || []).map(ingredient => 
                         `<div class="ingredient-item">${ingredient}</div>`
                     ).join('')}
                 </div>
@@ -456,7 +477,7 @@ class RecipeGenerator {
             <div class="recipe-section">
                 <h2 class="section-title">👨‍🍳 Instructions</h2>
                 <div class="instructions-list">
-                    ${recipe.instructions.map(instruction => 
+                    ${(recipe.instructions || []).map(instruction => 
                         `<div class="instruction-item">${instruction}</div>`
                     ).join('')}
                 </div>
@@ -511,7 +532,7 @@ class RecipeGenerator {
             ` : ''}
             
             <div class="generation-stats">
-                <p><strong>Generated in ${data.generation_time} seconds with ${data.iterations} iteration${data.iterations > 1 ? 's' : ''}</strong></p>
+                <p><strong>Generated in ${data.generation_time || data.result?.generation_time || 'unknown'} seconds with ${data.iterations || data.result?.iterations || 1} iteration${(data.iterations || data.result?.iterations || 1) > 1 ? 's' : ''}</strong></p>
                 <p style="margin-top: 10px; color: #666;">Complexity: ${recipe.difficulty}</p>
                 <div style="margin-top: 15px;">
                     <button onclick="recipeApp.printCurrentRecipe()" class="print-recipe-btn">🖨️ Print Recipe</button>
