@@ -132,7 +132,7 @@ class SimpleRecipeQueue:
     
 
     def add_task(self, user_request: str, complexity: str) -> str:
-        """Add task to queue and ensure worker is started"""
+        """Add task to queue with timeout protection"""
         
         # Ensure worker is running before adding tasks (lazy startup)
         self._ensure_worker_started()
@@ -150,49 +150,87 @@ class SimpleRecipeQueue:
         )
         
         try:
-            # Store task BEFORE queuing
-            with self.lock:
+            # SAFE: Use timeout on lock acquisition to prevent deadlock
+            lock_acquired = self.lock.acquire(timeout=5.0)  # 5 second timeout
+            if not lock_acquired:
+                logger.error(f"❌ Lock timeout adding task {task_id}")
+                task.status = TaskStatus.FAILED
+                task.error = "System busy, please try again"
+                # Store failed task without lock
                 self.tasks[task_id] = task
-                logger.info(f"✅ Task {task_id} stored in tasks dict. Total tasks: {len(self.tasks)}")
+                return task_id
             
-            # Add to processing queue
-            self.queue.put(task, timeout=1)
-            logger.info(f"✅ Task {task_id} added to processing queue. Queue size: {self.queue.qsize()}")
+            try:
+                # Store task while holding lock
+                self.tasks[task_id] = task
+                task_count = len(self.tasks)
+                logger.info(f"✅ Task {task_id} stored. Total tasks: {task_count}")
+            finally:
+                self.lock.release()
+            
+            # Add to processing queue (this is thread-safe on its own)
+            try:
+                self.queue.put(task, timeout=1)
+                logger.info(f"✅ Task {task_id} queued. Queue size: {self.queue.qsize()}")
+            except:
+                logger.error(f"❌ Queue full for task {task_id}")
+                # Mark as failed but keep in tasks dict
+                with self.lock.acquire(timeout=2.0):
+                    if self.lock.acquire(timeout=2.0):
+                        task.status = TaskStatus.FAILED
+                        task.error = "Queue full"
+                        self.lock.release()
             
             return task_id
             
         except Exception as e:
-            logger.error(f"❌ Failed to queue task {task_id}: {str(e)}")
-            
-            # Mark task as failed but keep it in storage for status checking
-            with self.lock:
-                task.status = TaskStatus.FAILED
-                task.error = "Queue is full, please try again later"
-                # Keep the task in self.tasks so status endpoint can find it
-            
+            logger.error(f"❌ Exception adding task {task_id}: {str(e)}")
             return task_id
-    
+
     def get_task_status(self, task_id: str) -> Dict:
-        """Get status of a queued/processing recipe"""
-        with self.lock:
-            task = self.tasks.get(task_id)
+        """Get status with deadlock protection"""
+        
+        try:
+            # SAFE: Use timeout on lock acquisition
+            lock_acquired = self.lock.acquire(timeout=3.0)  # 3 second timeout
+            if not lock_acquired:
+                logger.error(f"❌ Lock timeout getting status for {task_id}")
+                return {"error": "System busy, please try again"}
             
-        if not task:
-            logger.warning(f"⚠️ Task not found: {task_id}")
-            return {"error": "Task not found"}
+            try:
+                task = self.tasks.get(task_id)
+                if not task:
+                    logger.warning(f"⚠️ Task not found: {task_id}")
+                    return {"error": "Task not found"}
+                
+                # Copy task data while holding lock
+                task_data = {
+                    "task_id": task.task_id,
+                    "status": task.status.value,
+                    "progress": task.progress.copy() if task.progress else {},
+                    "result": task.result,
+                    "error": task.error,
+                    "queue_position": None
+                }
+                
+                # Calculate queue position if needed
+                if task.status == TaskStatus.QUEUED:
+                    queue_position = 1
+                    for other_task in self.tasks.values():
+                        if (other_task.status == TaskStatus.QUEUED and 
+                            other_task.created_at < task.created_at):
+                            queue_position += 1
+                    task_data["queue_position"] = queue_position
+                
+                return task_data
+                
+            finally:
+                self.lock.release()
+                
+        except Exception as e:
+            logger.error(f"❌ Exception getting status for {task_id}: {str(e)}")
+            return {"error": f"Status check failed: {str(e)}"}
         
-        queue_position = None
-        if task.status == TaskStatus.QUEUED:
-            queue_position = self._get_queue_position(task_id)
-        
-        return {
-            "task_id": task.task_id,
-            "status": task.status.value,
-            "progress": task.progress,
-            "result": task.result,
-            "error": task.error,
-            "queue_position": queue_position
-        }
     
     def _get_queue_position(self, task_id: str) -> int:
         """Calculate position in queue for a given task"""
@@ -209,42 +247,64 @@ class SimpleRecipeQueue:
         return position
     
     def _process_task_safe(self, task: RecipeTask):
-        """Ultra-safe task processing that never crashes the worker"""
+        """Ultra-safe task processing with timeout protection"""
         thread_name = threading.current_thread().name
         
         try:
-            with self.lock:
+            # SAFE: Update processing count with timeout
+            lock_acquired = self.lock.acquire(timeout=5.0)
+            if not lock_acquired:
+                logger.error(f"❌ [{thread_name}] Lock timeout starting task {task.task_id}")
+                return
+            
+            try:
                 self.processing_count += 1
                 task.status = TaskStatus.PROCESSING
                 task.progress = {"step": "processing", "message": "Starting recipe generation..."}
+            finally:
+                self.lock.release()
             
-            logger.info(f"🎯 [{thread_name}] Processing task: {task.task_id} for '{task.user_request}'")
+            logger.info(f"🎯 [{thread_name}] Processing task: {task.task_id}")
             
-            # Try to run the full pipeline
+            # Run pipeline without holding locks
             result = self._run_minimal_pipeline(task)
             
-            with self.lock:
-                task.status = TaskStatus.COMPLETED
-                task.result = result
-                task.progress = {"step": "completed", "message": "Recipe generation complete!"}
+            # SAFE: Update completion with timeout
+            lock_acquired = self.lock.acquire(timeout=5.0)
+            if lock_acquired:
+                try:
+                    task.status = TaskStatus.COMPLETED
+                    task.result = result
+                    task.progress = {"step": "completed", "message": "Recipe generation complete!"}
+                finally:
+                    self.lock.release()
             
             logger.info(f"✅ [{thread_name}] Task completed: {task.task_id}")
             
         except Exception as e:
-            logger.error(f"❌ [{thread_name}] Task processing failed: {task.task_id} - {str(e)}")
-            logger.error(traceback.format_exc())
+            logger.error(f"❌ [{thread_name}] Task failed: {task.task_id} - {str(e)}")
             
-            # Always mark as failed rather than crash
-            with self.lock:
-                task.status = TaskStatus.FAILED
-                task.error = str(e)
-                task.progress = {"step": "failed", "message": f"Processing failed: {str(e)}"}
-        
+            # SAFE: Mark as failed with timeout
+            lock_acquired = self.lock.acquire(timeout=3.0)
+            if lock_acquired:
+                try:
+                    task.status = TaskStatus.FAILED
+                    task.error = str(e)
+                    task.progress = {"step": "failed", "message": f"Processing failed: {str(e)}"}
+                finally:
+                    self.lock.release()
+            
         finally:
-            # ALWAYS decrement the processing count
-            with self.lock:
-                self.processing_count -= 1
-            logger.info(f"🔄 [{thread_name}] Processing count after task {task.task_id}: {self.processing_count}")
+            # CRITICAL: Always decrement processing count
+            lock_acquired = self.lock.acquire(timeout=5.0)
+            if lock_acquired:
+                try:
+                    self.processing_count -= 1
+                finally:
+                    self.lock.release()
+            
+            logger.info(f"🔄 [{thread_name}] Processing count decremented for {task.task_id}")
+            
     
     def _run_minimal_pipeline(self, task):
         """Minimal pipeline that works even if agents fail to import"""
@@ -420,21 +480,48 @@ class SimpleRecipeQueue:
         return datetime.now().isoformat()
     
     def get_queue_stats(self) -> Dict:
-        """Get queue statistics for debugging"""
-        with self.lock:
-            return {
-                'processing_count': self.processing_count,
-                'max_concurrent': self.max_concurrent,
-                'total_tasks': len(self.tasks),
-                'queue_size': self.queue.qsize(),
-                'worker_alive': self.worker_thread.is_alive() if self.worker_thread else False,
-                'startup_complete': self.startup_complete,
-                'tasks_by_status': {
-                    status.value: len([t for t in self.tasks.values() if t.status == status])
-                    for status in TaskStatus
+        """Get queue statistics with timeout protection"""
+        
+        try:
+            lock_acquired = self.lock.acquire(timeout=2.0)  # 2 second timeout
+            if not lock_acquired:
+                logger.error("❌ Lock timeout getting queue stats")
+                return {
+                    'error': 'System busy',
+                    'processing_count': -1,
+                    'max_concurrent': self.max_concurrent,
+                    'total_tasks': -1,
+                    'queue_size': self.queue.qsize() if hasattr(self.queue, 'qsize') else -1,
+                    'worker_alive': False,
+                    'startup_complete': self.startup_complete
                 }
-            }
-    
+            
+            try:
+                stats = {
+                    'processing_count': self.processing_count,
+                    'max_concurrent': self.max_concurrent,
+                    'total_tasks': len(self.tasks),
+                    'queue_size': self.queue.qsize(),
+                    'worker_alive': self.worker_thread.is_alive() if self.worker_thread else False,
+                    'startup_complete': self.startup_complete,
+                    'tasks_by_status': {}
+                }
+                
+                # Count tasks by status
+                for task in self.tasks.values():
+                    status = task.status.value
+                    stats['tasks_by_status'][status] = stats['tasks_by_status'].get(status, 0) + 1
+                
+                return stats
+                
+            finally:
+                self.lock.release()
+                
+        except Exception as e:
+            logger.error(f"❌ Exception getting queue stats: {str(e)}")
+            return {'error': str(e)}
+        
+            
     def _setup_graceful_shutdown(self):
         """Setup graceful shutdown for the worker thread"""
         
