@@ -351,55 +351,19 @@ class RecipeGenerator {
                 
                 console.log(`Polling status for task: ${taskId} (attempt ${pollCount + 1})`);
                 
-const response = await fetch(`/api/recipe-status/${taskId}`, {
+                const response = await fetch(`/api/recipe-status/${taskId}`, {
                     method: 'GET',
                     headers: {
                         'Accept': 'application/json',
                     }
                 });
                 
-                // If endpoint doesn't exist (404), fall back to synchronous immediately
-                if (response.status === 404) {
-                    console.log('Queue endpoint not available, using synchronous generation');
-                    
-                    // Immediate fallback to synchronous generation
-                    const fallbackResponse = await fetch('/api/generate-recipe', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ 
-                            recipe_request: request,
-                            complexity: complexity,
-                            use_queue: false
-                        })
-                    });
-                    
-                    const fallbackData = await fallbackResponse.json();
-                    
-                    if (fallbackData.success) {
-                        this.displayRecipe(fallbackData);
-                        
-                        if (!this.hasGeneratedFirstRecipe) {
-                            this.hasGeneratedFirstRecipe = true;
-                            this.showRecentRecipesSection();
-                        }
-                        
-                        this.loadRecentRecipes();
-                    } else {
-                        this.showError(fallbackData.error || 'Recipe generation failed');
-                    }
-                    
-                    this.hideLoading();
-                    return; // Exit polling
-                }
-                
                 if (!response.ok) {
                     const errorText = await response.text();
                     console.error('Status check failed:', response.status, errorText);
                     throw new Error(`Status check failed: ${response.status}`);
                 }
-                                
+                
                 const status = await response.json();
                 console.log('Status response:', status);
                 
@@ -911,7 +875,7 @@ const response = await fetch(`/api/recipe-status/${taskId}`, {
             
             if (data.success && data.recipes.length > 0) {
                 const html = data.recipes.map(recipe => `
-                    <div class="recent-recipe-item" onclick="recipeApp.viewRecipe('${recipe.id}')">
+                    <div class="recent-recipe-item" data-recipe-id="${recipe.id}" onclick="recipeApp.viewRecipe(this.dataset.recipeId)">
                         <div>
                             <strong>${recipe.title}</strong>
                             <br>
@@ -1003,7 +967,7 @@ const response = await fetch(`/api/recipe-status/${taskId}`, {
                 timestamp: new Date().toISOString()
             });
             
-            const response = await fetch('/api/recipes/${recipeId}');
+            const response = await fetch(`/api/recipes/${recipeId}`);
             const data = await response.json();
             
             if (data.success) {
