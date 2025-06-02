@@ -858,8 +858,217 @@ class RecipeGenerator {
     }
     
     getPrintStyles() {
-        // All print styles are handled in styles.css
-        return '';
+        return `
+            @page {
+                margin: 0.5in;
+            }
+            
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body {
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+                font-size: 11pt;
+                line-height: 1.4;
+                color: #000;
+                background: white;
+            }
+            
+            .print-container {
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            
+            .recipe-header {
+                text-align: left;
+                margin-bottom: 20pt;
+                page-break-after: avoid;
+                padding-bottom: 16pt;
+                border-bottom: 2pt solid #333;
+            }
+            
+            .recipe-title {
+                font-size: 18pt;
+                font-weight: 700;
+                margin-bottom: 12pt;
+                line-height: 1.2;
+                color: black;
+            }
+            
+            .recipe-description {
+                font-size: 11pt;
+                margin-bottom: 16pt;
+                font-style: italic;
+                color: #555;
+                line-height: 1.4;
+            }
+            
+            .recipe-meta {
+                display: block;
+                margin-bottom: 20pt;
+                font-size: 10pt;
+            }
+            
+            .meta-item {
+                display: inline-block;
+                margin: 0 12pt 6pt 0;
+                padding: 4pt 8pt;
+                background: #f0f0f0;
+                border-radius: 4pt;
+                font-size: 10pt;
+                font-weight: 500;
+            }
+            
+            .recipe-section {
+                margin-bottom: 20pt;
+                page-break-inside: avoid;
+            }
+            
+            .section-title {
+                font-size: 14pt;
+                font-weight: 700;
+                margin-bottom: 10pt;
+                padding-bottom: 4pt;
+                border-bottom: 1pt solid #ccc;
+                color: black;
+                page-break-after: avoid;
+            }
+            
+            .ingredients-grid {
+                margin-bottom: 8pt;
+            }
+            
+            .ingredient-item {
+                background: #f8f9fa;
+                padding: 6pt 10pt;
+                margin-bottom: 3pt;
+                border-left: 3pt solid #667eea;
+                font-size: 10pt;
+                line-height: 1.3;
+                page-break-inside: avoid;
+            }
+            
+            .instructions-list {
+                counter-reset: step-counter;
+            }
+            
+            .instruction-item {
+                counter-increment: step-counter;
+                margin-bottom: 12pt;
+                padding: 12pt 12pt 12pt 36pt;
+                position: relative;
+                font-size: 11pt;
+                line-height: 1.5;
+                page-break-inside: avoid;
+                background: #f8f9fa;
+                border-radius: 6pt;
+                border-left: 3pt solid #667eea;
+            }
+            
+            .instruction-item::before {
+                content: counter(step-counter);
+                position: absolute;
+                left: 12pt;
+                top: 12pt;
+                background: #667eea;
+                color: white;
+                width: 18pt;
+                height: 18pt;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 9pt;
+                font-weight: bold;
+            }
+            
+            .nutrition-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 10pt;
+                margin-bottom: 16pt;
+                page-break-inside: avoid;
+            }
+            
+            .nutrition-card {
+                text-align: center;
+                padding: 10pt;
+                background: #f8f9fa;
+                border-radius: 6pt;
+                border: 1pt solid #e9ecef;
+            }
+            
+            .nutrition-value {
+                font-size: 16pt;
+                font-weight: bold;
+                color: #667eea;
+                display: block;
+                margin-bottom: 2pt;
+            }
+            
+            .nutrition-label {
+                font-size: 9pt;
+                color: #666;
+                font-weight: 500;
+            }
+            
+            .health-insights, .enhancement-list {
+                background: #f0f8ff;
+                padding: 12pt;
+                border-left: 4pt solid #2196f3;
+                border-radius: 6pt;
+                margin-bottom: 16pt;
+                page-break-inside: avoid;
+            }
+            
+            .enhancement-list {
+                background: #f0f8f0;
+                border-left: 4pt solid #28a745;
+            }
+            
+            .health-insights h3 {
+                font-size: 11pt;
+                margin-bottom: 6pt;
+                color: #1976d2;
+                font-weight: 600;
+            }
+            
+            .health-insights ul, .enhancement-list ul {
+                margin: 0;
+                padding-left: 16pt;
+            }
+            
+            .health-insights li, .enhancement-list li {
+                font-size: 10pt;
+                margin-bottom: 4pt;
+                line-height: 1.4;
+            }
+            
+            .generation-stats {
+                margin-top: 16pt;
+                padding: 8pt;
+                border-top: 1pt solid #ddd;
+                font-size: 9pt;
+                color: #666;
+                background: #f8f8f8;
+                border-radius: 4pt;
+                page-break-inside: avoid;
+            }
+            
+            /* Hide elements that shouldn't print */
+            .print-recipe-btn {
+                display: none !important;
+            }
+            
+            /* Prevent orphaned content */
+            h1, h2, h3 {
+                page-break-after: avoid;
+            }
+        `;
     }
     
     showError(message) {
