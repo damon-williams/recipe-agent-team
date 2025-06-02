@@ -130,6 +130,7 @@ class SimpleRecipeQueue:
             logger.error(f"❌ Failed to create delayed worker thread: {str(e)}")
             logger.error(traceback.format_exc())
     
+
     def add_task(self, user_request: str, complexity: str) -> str:
         """Add task to queue and ensure worker is started"""
         
@@ -137,6 +138,8 @@ class SimpleRecipeQueue:
         self._ensure_worker_started()
         
         task_id = str(uuid.uuid4())
+        logger.info(f"🎯 Creating task {task_id} for '{user_request}' ({complexity})")
+        
         task = RecipeTask(
             task_id=task_id,
             user_request=user_request,
@@ -146,19 +149,57 @@ class SimpleRecipeQueue:
             progress={"step": "queued", "message": "Request queued for processing"}
         )
         
-        with self.lock:
-            self.tasks[task_id] = task
-            
         try:
+            # Store task BEFORE queuing
+            with self.lock:
+                self.tasks[task_id] = task
+                logger.info(f"✅ Task {task_id} stored in tasks dict. Total tasks: {len(self.tasks)}")
+            
+            # Add to processing queue
             self.queue.put(task, timeout=1)
-            logger.info(f"✅ Task queued: {task_id} for '{user_request}'")
+            logger.info(f"✅ Task {task_id} added to processing queue. Queue size: {self.queue.qsize()}")
+            
             return task_id
-        except:
-            # Queue full
-            task.status = TaskStatus.FAILED
-            task.error = "Queue is full, please try again later"
-            logger.error(f"❌ Queue full, failed to add task: {task_id}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to queue task {task_id}: {str(e)}")
+            
+            # Mark task as failed but keep it in storage for status checking
+            with self.lock:
+                task.status = TaskStatus.FAILED
+                task.error = "Queue is full, please try again later"
+                # Keep the task in self.tasks so status endpoint can find it
+            
             return task_id
+
+    # Also add a debug endpoint to web_app.py to see all tasks:
+
+    @app.route('/api/debug/tasks', methods=['GET'])
+    def debug_tasks():
+        """Debug endpoint to see all tasks in the queue"""
+        if not recipe_team or not hasattr(recipe_team, 'queue'):
+            return jsonify({'error': 'No queue system available'}), 500
+        
+        queue = recipe_team.queue
+        
+        tasks_info = []
+        with queue.lock:
+            for task_id, task in queue.tasks.items():
+                tasks_info.append({
+                    'task_id': task_id,
+                    'status': task.status.value,
+                    'user_request': task.user_request,
+                    'created_at': task.created_at,
+                    'progress': task.progress,
+                    'error': task.error
+                })
+        
+        return jsonify({
+            'total_tasks': len(tasks_info),
+            'tasks': tasks_info,
+            'queue_size': queue.queue.qsize(),
+            'processing_count': queue.processing_count
+        })
     
     def get_task_status(self, task_id: str) -> Dict:
         """Get status of a queued/processing recipe"""

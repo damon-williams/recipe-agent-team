@@ -115,6 +115,8 @@ def generate_recipe():
         traceback.print_exc()
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
+# Fix the recipe status endpoint in web_app.py
+
 @app.route('/api/recipe-status/<task_id>', methods=['GET'])
 def get_recipe_status(task_id):
     """Get status of a queued recipe generation"""
@@ -124,9 +126,12 @@ def get_recipe_status(task_id):
     try:
         status = recipe_team.get_recipe_status(task_id)
         
+        # CRITICAL FIX: Check for error and return proper status code
         if 'error' in status:
+            # Task not found should return 404
             return jsonify(status), 404
         
+        # CRITICAL FIX: Valid status should return 200, not 404
         # If completed, save to database
         if status['status'] == 'completed' and status['result'] and supabase:
             try:
@@ -144,11 +149,13 @@ def get_recipe_status(task_id):
             except Exception as db_error:
                 print(f"⚠️ Database save failed: {db_error}")
 
-        return jsonify(status)
+        # Return 200 for valid status (not 404!)
+        return jsonify(status), 200
 
     except Exception as e:
         print(f"❌ Status check error: {str(e)}")
         return jsonify({'error': f'Status check failed: {str(e)}'}), 500
+    
 
 def _prepare_recipe_for_db(result, original_request, complexity, generation_time):
     """Helper to prepare recipe data for database storage"""
