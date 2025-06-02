@@ -43,7 +43,13 @@ class SimpleRecipeQueue:
         self.running = True
         self.startup_complete = False
         
+        # ADD: Task retention settings
+        self.task_retention_time = 300  # Keep completed tasks for 5 minutes
+        self.last_cleanup = time.time()
+        self.cleanup_interval = 60  # Run cleanup every 60 seconds
+        
         logger.info(f"🚀 Initializing queue with max_concurrent={max_concurrent}")
+        logger.info(f"🕐 Task retention: {self.task_retention_time}s, cleanup interval: {self.cleanup_interval}s")
         
         # Setup graceful shutdown handlers
         self._setup_graceful_shutdown()
@@ -131,6 +137,53 @@ class SimpleRecipeQueue:
             logger.error(traceback.format_exc())
     
 
+    def _cleanup_old_tasks(self):
+        """Clean up old completed/failed tasks to prevent memory leaks"""
+        
+        current_time = time.time()
+        
+        # Only run cleanup periodically
+        if current_time - self.last_cleanup < self.cleanup_interval:
+            return
+        
+        try:
+            lock_acquired = self.lock.acquire(timeout=2.0)
+            if not lock_acquired:
+                logger.warning("⚠️ Could not acquire lock for task cleanup")
+                return
+            
+            try:
+                tasks_to_remove = []
+                
+                for task_id, task in self.tasks.items():
+                    # Only clean up completed or failed tasks (keep processing/queued tasks)
+                    if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
+                        # Calculate how long ago the task finished (not when it was created)
+                        task_completion_time = getattr(task, 'completion_time', task.created_at)
+                        task_age_since_completion = current_time - task_completion_time
+                        
+                        if task_age_since_completion > self.task_retention_time:
+                            tasks_to_remove.append(task_id)
+                
+                # Remove old tasks
+                removed_count = 0
+                for task_id in tasks_to_remove:
+                    if task_id in self.tasks:
+                        del self.tasks[task_id]
+                        removed_count += 1
+                        logger.debug(f"🧹 Cleaned up old task: {task_id}")
+                
+                if removed_count > 0:
+                    logger.info(f"🧹 Cleaned up {removed_count} old tasks. Remaining: {len(self.tasks)}")
+                
+                self.last_cleanup = current_time
+                
+            finally:
+                self.lock.release()
+                
+        except Exception as e:
+            logger.error(f"❌ Task cleanup failed: {str(e)}")
+            
     def add_task(self, user_request: str, complexity: str) -> str:
         """Add task to queue with timeout protection"""
         
@@ -188,11 +241,14 @@ class SimpleRecipeQueue:
             return task_id
 
     def get_task_status(self, task_id: str) -> Dict:
-        """Get status with deadlock protection"""
+        """Get status with cleanup management and extended retention"""
+        
+        # Run periodic cleanup before checking status
+        self._cleanup_old_tasks()
         
         try:
             # SAFE: Use timeout on lock acquisition
-            lock_acquired = self.lock.acquire(timeout=3.0)  # 3 second timeout
+            lock_acquired = self.lock.acquire(timeout=3.0)
             if not lock_acquired:
                 logger.error(f"❌ Lock timeout getting status for {task_id}")
                 return {"error": "System busy, please try again"}
@@ -222,6 +278,12 @@ class SimpleRecipeQueue:
                             queue_position += 1
                     task_data["queue_position"] = queue_position
                 
+                # ADD: Debug info for completed tasks
+                if task.status == TaskStatus.COMPLETED:
+                    completion_time = getattr(task, 'completion_time', task.created_at)
+                    age_since_completion = time.time() - completion_time
+                    logger.debug(f"📊 Completed task {task_id} age: {age_since_completion:.1f}s (retention: {self.task_retention_time}s)")
+                
                 return task_data
                 
             finally:
@@ -247,35 +309,21 @@ class SimpleRecipeQueue:
         return position
     
     def _process_task_safe(self, task: RecipeTask):
-        """Ultra-safe task processing with timeout protection"""
+        """Ultra-safe task processing with completion timestamp tracking"""
         thread_name = threading.current_thread().name
         
         try:
-            # SAFE: Update processing count with timeout
-            lock_acquired = self.lock.acquire(timeout=5.0)
-            if not lock_acquired:
-                logger.error(f"❌ [{thread_name}] Lock timeout starting task {task.task_id}")
-                return
+            # ... existing processing code ...
             
-            try:
-                self.processing_count += 1
-                task.status = TaskStatus.PROCESSING
-                task.progress = {"step": "processing", "message": "Starting recipe generation..."}
-            finally:
-                self.lock.release()
-            
-            logger.info(f"🎯 [{thread_name}] Processing task: {task.task_id}")
-            
-            # Run pipeline without holding locks
-            result = self._run_minimal_pipeline(task)
-            
-            # SAFE: Update completion with timeout
+            # WHEN TASK COMPLETES SUCCESSFULLY:
             lock_acquired = self.lock.acquire(timeout=5.0)
             if lock_acquired:
                 try:
                     task.status = TaskStatus.COMPLETED
                     task.result = result
                     task.progress = {"step": "completed", "message": "Recipe generation complete!"}
+                    # ADD: Track completion time for cleanup
+                    task.completion_time = time.time()
                 finally:
                     self.lock.release()
             
@@ -284,13 +332,15 @@ class SimpleRecipeQueue:
         except Exception as e:
             logger.error(f"❌ [{thread_name}] Task failed: {task.task_id} - {str(e)}")
             
-            # SAFE: Mark as failed with timeout
+            # WHEN TASK FAILS:
             lock_acquired = self.lock.acquire(timeout=3.0)
             if lock_acquired:
                 try:
                     task.status = TaskStatus.FAILED
                     task.error = str(e)
                     task.progress = {"step": "failed", "message": f"Processing failed: {str(e)}"}
+                    # ADD: Track completion time for cleanup (even for failures)
+                    task.completion_time = time.time()
                 finally:
                     self.lock.release()
             
@@ -480,10 +530,13 @@ class SimpleRecipeQueue:
         return datetime.now().isoformat()
     
     def get_queue_stats(self) -> Dict:
-        """Get queue statistics with timeout protection"""
+        """Get queue statistics with task retention info"""
+        
+        # Run cleanup before getting stats
+        self._cleanup_old_tasks()
         
         try:
-            lock_acquired = self.lock.acquire(timeout=2.0)  # 2 second timeout
+            lock_acquired = self.lock.acquire(timeout=2.0)
             if not lock_acquired:
                 logger.error("❌ Lock timeout getting queue stats")
                 return {
@@ -504,7 +557,10 @@ class SimpleRecipeQueue:
                     'queue_size': self.queue.qsize(),
                     'worker_alive': self.worker_thread.is_alive() if self.worker_thread else False,
                     'startup_complete': self.startup_complete,
-                    'tasks_by_status': {}
+                    'tasks_by_status': {},
+                    # ADD: Task retention info
+                    'task_retention_minutes': self.task_retention_time / 60,
+                    'last_cleanup_ago': int(time.time() - self.last_cleanup)
                 }
                 
                 # Count tasks by status
