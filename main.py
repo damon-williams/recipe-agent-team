@@ -313,14 +313,30 @@ class SimpleRecipeQueue:
         thread_name = threading.current_thread().name
         
         try:
-            # ... existing processing code ...
+            # SAFE: Update processing count with timeout
+            lock_acquired = self.lock.acquire(timeout=5.0)
+            if not lock_acquired:
+                logger.error(f"❌ [{thread_name}] Lock timeout starting task {task.task_id}")
+                return
             
-            # WHEN TASK COMPLETES SUCCESSFULLY:
+            try:
+                self.processing_count += 1
+                task.status = TaskStatus.PROCESSING
+                task.progress = {"step": "processing", "message": "Starting recipe generation..."}
+            finally:
+                self.lock.release()
+            
+            logger.info(f"🎯 [{thread_name}] Processing task: {task.task_id}")
+            
+            # Run pipeline without holding locks
+            result = self._run_minimal_pipeline(task)  # ← FIXED: result is defined here
+            
+            # SAFE: Update completion with timeout
             lock_acquired = self.lock.acquire(timeout=5.0)
             if lock_acquired:
                 try:
                     task.status = TaskStatus.COMPLETED
-                    task.result = result
+                    task.result = result  # ← FIXED: Now result is in scope
                     task.progress = {"step": "completed", "message": "Recipe generation complete!"}
                     # ADD: Track completion time for cleanup
                     task.completion_time = time.time()
@@ -332,7 +348,7 @@ class SimpleRecipeQueue:
         except Exception as e:
             logger.error(f"❌ [{thread_name}] Task failed: {task.task_id} - {str(e)}")
             
-            # WHEN TASK FAILS:
+            # SAFE: Mark as failed with timeout
             lock_acquired = self.lock.acquire(timeout=3.0)
             if lock_acquired:
                 try:
