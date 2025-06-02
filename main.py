@@ -44,9 +44,9 @@ class SimpleRecipeQueue:
         self.startup_complete = False
         
         # ADD: Task retention settings
-        self.task_retention_time = 300  # Keep completed tasks for 5 minutes
+        self.task_retention_time = 1200  # Keep completed tasks for 5 minutes
         self.last_cleanup = time.time()
-        self.cleanup_interval = 60  # Run cleanup every 60 seconds
+        self.cleanup_interval = 120  # Run cleanup every 60 seconds
         
         logger.info(f"🚀 Initializing queue with max_concurrent={max_concurrent}")
         logger.info(f"🕐 Task retention: {self.task_retention_time}s, cleanup interval: {self.cleanup_interval}s")
@@ -156,6 +156,10 @@ class SimpleRecipeQueue:
                 tasks_to_remove = []
                 
                 for task_id, task in self.tasks.items():
+                    # CRITICAL: NEVER clean up processing or queued tasks
+                    if task.status in [TaskStatus.PROCESSING, TaskStatus.QUEUED]:
+                        continue  # Skip active tasks completely
+                    
                     # Only clean up completed or failed tasks (keep processing/queued tasks)
                     if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
                         # Calculate how long ago the task finished (not when it was created)
@@ -164,6 +168,7 @@ class SimpleRecipeQueue:
                         
                         if task_age_since_completion > self.task_retention_time:
                             tasks_to_remove.append(task_id)
+                            logger.debug(f"🧹 Marking task {task_id} for cleanup (age: {task_age_since_completion:.1f}s)")
                 
                 # Remove old tasks
                 removed_count = 0
@@ -284,6 +289,11 @@ class SimpleRecipeQueue:
                     age_since_completion = time.time() - completion_time
                     logger.debug(f"📊 Completed task {task_id} age: {age_since_completion:.1f}s (retention: {self.task_retention_time}s)")
                 
+                # DEBUG: Log task age for processing tasks
+                if task.status == TaskStatus.PROCESSING:
+                    task_age = time.time() - task.created_at
+                    logger.debug(f"📊 Processing task {task_id} age: {task_age:.1f}s")
+                    
                 return task_data
                 
             finally:
