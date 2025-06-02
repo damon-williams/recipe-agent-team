@@ -1,4 +1,4 @@
-# web_app.py - Optimized with async queue support
+# web_app.py - Railway-compatible version with simple queue
 import os
 import sys
 import time
@@ -17,11 +17,11 @@ load_dotenv()
 # Add agents folder to Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'agents'))
 
-# Import optimized agent orchestrator
+# Import recipe team with simple queue
 try:
     from main import get_recipe_team
     recipe_team = get_recipe_team()
-    print("✅ Optimized RecipeAgentTeam initialized")
+    print("✅ Recipe Agent Team with queue initialized")
 except ImportError as e:
     print(f"❌ Could not import RecipeAgentTeam: {e}")
     recipe_team = None
@@ -42,7 +42,7 @@ def index():
 
 @app.route('/api/generate-recipe', methods=['POST'])
 def generate_recipe():
-    """Queue a recipe generation request"""
+    """Generate recipe with queue support"""
     if not recipe_team:
         return jsonify({'error': 'Recipe agent not available'}), 500
 
@@ -50,6 +50,7 @@ def generate_recipe():
         data = request.get_json()
         user_request = data.get('recipe_request', '').strip()
         complexity = data.get('complexity', 'Medium')
+        use_queue = data.get('use_queue', True)  # Allow disabling queue for testing
 
         if not user_request:
             return jsonify({'error': 'Recipe request is required'}), 400
@@ -66,26 +67,48 @@ def generate_recipe():
         if backend_complexity not in valid_complexity_levels:
             backend_complexity = 'Medium'
 
-        print(f"🌐 Queueing request: {user_request} (Complexity: {backend_complexity})")
+        print(f"🌐 Recipe request: {user_request} (Complexity: {backend_complexity})")
 
-        # Queue the recipe generation (non-blocking)
-        import asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        task_id = loop.run_until_complete(
-            recipe_team.queue_recipe_generation(user_request, backend_complexity)
-        )
-        
-        loop.close()
+        if use_queue:
+            # Queue the recipe generation (non-blocking)
+            task_id = recipe_team.queue_recipe_generation(user_request, backend_complexity)
+            
+            return jsonify({
+                'success': True,
+                'task_id': task_id,
+                'status': 'queued',
+                'message': 'Recipe generation queued. Use task_id to check status.',
+                'complexity_requested': complexity
+            })
+        else:
+            # Synchronous generation (for backward compatibility)
+            start_time = time.time()
+            result = recipe_team.generate_recipe(user_request, backend_complexity)
+            generation_time = int(time.time() - start_time)
 
-        # Return task ID for polling
-        return jsonify({
-            'success': True,
-            'task_id': task_id,
-            'status': 'queued',
-            'message': 'Recipe generation queued. Use task_id to check status.'
-        })
+            if result.get('success'):
+                # Save to database
+                if supabase:
+                    try:
+                        recipe_data = self._prepare_recipe_for_db(result, user_request, complexity, generation_time)
+                        supabase.table('recipes').insert(recipe_data).execute()
+                    except Exception as db_error:
+                        print(f"⚠️ Database save failed: {db_error}")
+
+                return jsonify({
+                    'success': True,
+                    'recipe': result['recipe'],
+                    'nutrition': result.get('nutrition'),
+                    'quality': result.get('quality'),
+                    'iterations': result.get('iterations'),
+                    'generation_time': generation_time,
+                    'complexity_requested': complexity
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': result.get('error', 'Recipe generation failed')
+                }), 500
 
     except Exception as e:
         print(f"❌ API Error: {str(e)}")
@@ -108,32 +131,13 @@ def get_recipe_status(task_id):
         if status['status'] == 'completed' and status['result'] and supabase:
             try:
                 result = status['result']
-                recipe_data = {
-                    'title': result['recipe'].get('title'),
-                    'description': result['recipe'].get('description'),
-                    'original_request': result['recipe'].get('original_request'),
-                    'prep_time': result['recipe'].get('prep_time'),
-                    'cook_time': result['recipe'].get('cook_time'),
-                    'total_time': result['recipe'].get('total_time'),
-                    'servings': result['recipe'].get('servings'),
-                    'difficulty': result['recipe'].get('difficulty'),
-                    'ingredients': result['recipe'].get('ingredients', []),
-                    'instructions': result['recipe'].get('instructions', []),
-                    'tags': result['recipe'].get('tags', []),
-                    'cuisine_type': result['recipe'].get('cuisine_type'),
-                    'meal_type': result['recipe'].get('meal_type'),
-                    'enhanced': result['recipe'].get('enhanced', False),
-                    'enhancements_made': result['recipe'].get('enhancements_made', []),
-                    'chef_notes': result['recipe'].get('chef_notes', []),
-                    'quality_score': result.get('quality', {}).get('score', 7.0),
-                    'quality_level': result.get('quality', {}).get('quality_level', 'Good'),
-                    'iterations_count': result.get('iterations', 1),
-                    'nutrition_data': result.get('nutrition'),
-                    'nutrition_score': result.get('nutrition', {}).get('nutrition_score'),
-                    'dietary_tags': result.get('nutrition', {}).get('dietary_tags', []),
-                    'generation_time_seconds': result.get('generation_time', 0)
-                }
-
+                
+                # Extract original request info from task
+                original_request = result['recipe'].get('original_request', 'Unknown request')
+                complexity = result.get('complexity_requested', 'Medium')
+                generation_time = result.get('generation_time', 0)
+                
+                recipe_data = self._prepare_recipe_for_db(result, original_request, complexity, generation_time)
                 supabase.table('recipes').insert(recipe_data).execute()
                 print(f"✅ Recipe saved to database: {recipe_data.get('title')}")
                 
@@ -146,20 +150,48 @@ def get_recipe_status(task_id):
         print(f"❌ Status check error: {str(e)}")
         return jsonify({'error': f'Status check failed: {str(e)}'}), 500
 
+def _prepare_recipe_for_db(result, original_request, complexity, generation_time):
+    """Helper to prepare recipe data for database storage"""
+    return {
+        'title': result['recipe'].get('title'),
+        'description': result['recipe'].get('description'),
+        'original_request': original_request,
+        'prep_time': result['recipe'].get('prep_time'),
+        'cook_time': result['recipe'].get('cook_time'),
+        'total_time': result['recipe'].get('total_time'),
+        'servings': result['recipe'].get('servings'),
+        'difficulty': complexity,  # Use frontend complexity
+        'ingredients': result['recipe'].get('ingredients', []),
+        'instructions': result['recipe'].get('instructions', []),
+        'tags': result['recipe'].get('tags', []),
+        'cuisine_type': result['recipe'].get('cuisine_type'),
+        'meal_type': result['recipe'].get('meal_type'),
+        'enhanced': result['recipe'].get('enhanced', False),
+        'enhancements_made': result['recipe'].get('enhancements_made', []),
+        'chef_notes': result['recipe'].get('chef_notes', []),
+        'quality_score': result.get('quality', {}).get('score', 7.0),
+        'quality_level': result.get('quality', {}).get('quality_level', 'Good'),
+        'iterations_count': result.get('iterations', 1),
+        'nutrition_data': result.get('nutrition'),
+        'nutrition_score': result.get('nutrition', {}).get('nutrition_score'),
+        'dietary_tags': result.get('nutrition', {}).get('dietary_tags', []),
+        'generation_time_seconds': generation_time
+    }
+
+# Add this to the app context for the helper function
+app._prepare_recipe_for_db = _prepare_recipe_for_db
+
 @app.route('/api/recipes', methods=['GET'])
 def get_recipes():
-    """Get recipes with filters (cached for performance)"""
+    """Get recipes with filters"""
     try:
-        # Get parameters from request
-        limit = min(int(request.args.get("limit", 10)), 50)  # Cap at 50
+        limit = min(int(request.args.get("limit", 10)), 50)
         search = request.args.get("search", "").strip()
         meal_type = request.args.get("meal_type", "").strip()
         difficulty = request.args.get("difficulty", "").strip()
         
-        # Start with base query
         query = supabase.table("recipes").select("*")
         
-        # Apply filters
         if search:
             query = query.or_(f"title.ilike.%{search}%,description.ilike.%{search}%")
         
@@ -169,9 +201,7 @@ def get_recipes():
         if difficulty and difficulty != "all":
             query = query.eq("difficulty", difficulty)
         
-        # Apply ordering and limit
         query = query.order("created_at", desc=True).limit(limit)
-        
         result = query.execute()
 
         return jsonify({
@@ -205,14 +235,16 @@ def get_recipe_by_id(recipe_id):
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    """Health check endpoint"""
+    """Health check endpoint with queue stats"""
     queue_stats = {}
-    if recipe_team:
-        queue_stats = {
-            'processing_count': recipe_team.queue.processing_count,
-            'max_concurrent': recipe_team.queue.max_concurrent,
-            'total_tasks': len(recipe_team.queue.tasks)
-        }
+    if recipe_team and hasattr(recipe_team, 'queue'):
+        with recipe_team.queue.lock:
+            queue_stats = {
+                'processing_count': recipe_team.queue.processing_count,
+                'max_concurrent': recipe_team.queue.max_concurrent,
+                'total_tasks': len(recipe_team.queue.tasks),
+                'queue_size': recipe_team.queue.queue.qsize() if hasattr(recipe_team.queue.queue, 'qsize') else 'unknown'
+            }
     
     return jsonify({
         'status': 'healthy',
@@ -225,4 +257,4 @@ def health():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
-    app.run(host='0.0.0.0', port=port, threaded=True)  # Enable threading
+    app.run(host='0.0.0.0', port=port)
