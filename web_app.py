@@ -115,7 +115,6 @@ def generate_recipe():
         traceback.print_exc()
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
-# Fix the recipe status endpoint in web_app.py
 
 @app.route('/api/recipe-status/<task_id>', methods=['GET'])
 def get_recipe_status(task_id):
@@ -126,14 +125,12 @@ def get_recipe_status(task_id):
     try:
         status = recipe_team.get_recipe_status(task_id)
         
-        # CRITICAL FIX: Check for error and return proper status code
-        if 'error' in status:
-            # Task not found should return 404
+        # FIXED: Only return 404 if error exists and is not null
+        if status.get('error'):  # This handles null/None properly
             return jsonify(status), 404
         
-        # CRITICAL FIX: Valid status should return 200, not 404
         # If completed, save to database
-        if status['status'] == 'completed' and status['result'] and supabase:
+        if status['status'] == 'completed' and status.get('result') and supabase:
             try:
                 result = status['result']
                 
@@ -149,7 +146,7 @@ def get_recipe_status(task_id):
             except Exception as db_error:
                 print(f"⚠️ Database save failed: {db_error}")
 
-        # Return 200 for valid status (not 404!)
+        # Return 200 for valid status
         return jsonify(status), 200
 
     except Exception as e:
