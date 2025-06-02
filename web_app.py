@@ -90,7 +90,7 @@ def generate_recipe():
                 # Save to database
                 if supabase:
                     try:
-                        recipe_data = self._prepare_recipe_for_db(result, user_request, complexity, generation_time)
+                        recipe_data = _prepare_recipe_for_db(result, user_request, complexity, generation_time)
                         supabase.table('recipes').insert(recipe_data).execute()
                     except Exception as db_error:
                         print(f"⚠️ Database save failed: {db_error}")
@@ -137,7 +137,7 @@ def get_recipe_status(task_id):
                 complexity = result.get('complexity_requested', 'Medium')
                 generation_time = result.get('generation_time', 0)
                 
-                recipe_data = self._prepare_recipe_for_db(result, original_request, complexity, generation_time)
+                recipe_data = _prepare_recipe_for_db(result, original_request, complexity, generation_time)
                 supabase.table('recipes').insert(recipe_data).execute()
                 print(f"✅ Recipe saved to database: {recipe_data.get('title')}")
                 
@@ -178,8 +178,7 @@ def _prepare_recipe_for_db(result, original_request, complexity, generation_time
         'generation_time_seconds': generation_time
     }
 
-# Add this to the app context for the helper function
-app._prepare_recipe_for_db = _prepare_recipe_for_db
+# Helper function is now module-level
 
 @app.route('/api/recipes', methods=['GET'])
 def get_recipes():
