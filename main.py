@@ -44,9 +44,9 @@ class SimpleRecipeQueue:
         self.startup_complete = False
         
         # ADD: Task retention settings
-        self.task_retention_time = 1200  # Keep completed tasks for 5 minutes
+        self.task_retention_time = 1800  # Keep completed tasks for 30 minutes
         self.last_cleanup = time.time()
-        self.cleanup_interval = 120  # Run cleanup every 60 seconds
+        self.cleanup_interval = 600  # Run cleanup every 10 minutes
         
         logger.info(f"🚀 Initializing queue with max_concurrent={max_concurrent}")
         logger.info(f"🕐 Task retention: {self.task_retention_time}s, cleanup interval: {self.cleanup_interval}s")

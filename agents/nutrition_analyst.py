@@ -34,10 +34,10 @@ class NutritionAnalyst:
         
         # Check if Edamam API is available
         self.has_edamam_api = bool(self.edamam_app_id and self.edamam_app_key)
-        if self.has_edamam_api:
-            print("✅ Edamam Nutrition API initialized")
-        else:
-            print("⚠️  No Edamam API credentials - using AI-powered analysis")
+        # if self.has_edamam_api:
+        #     print("✅ Edamam Nutrition API initialized")
+        # else:
+        #     print("⚠️  No Edamam API credentials - using AI-powered analysis")
         
         # Load basic nutrition database for fallback
         self.ingredient_nutrition_db = self._load_basic_nutrition_db()
