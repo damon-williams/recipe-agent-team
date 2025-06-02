@@ -215,6 +215,7 @@ class RecipeGenerator {
         const startTime = Date.now();
         
         try {
+            // First, try queued generation for better performance
             const response = await fetch('/api/generate-recipe', {
                 method: 'POST',
                 headers: {
@@ -222,39 +223,36 @@ class RecipeGenerator {
                 },
                 body: JSON.stringify({ 
                     recipe_request: request,
-                    complexity: complexity 
+                    complexity: complexity,
+                    use_queue: true  // Use queue by default
                 })
             });
             
             const data = await response.json();
             
-            if (data.success) {
+            if (data.success && data.task_id) {
+                // Start polling for status - don't display anything yet
+                await this.pollRecipeStatus(data.task_id, request, complexity, startTime);
+            } else if (data.success && data.recipe) {
+                // Synchronous response (fallback) - display immediately
                 const generationTime = (Date.now() - startTime) / 1000;
                 
-                // Track successful recipe generation
                 this.trackEvent('recipe_generated_success', {
                     recipe_title: data.recipe?.title,
                     recipe_request: request,
                     complexity: complexity,
                     generation_time: generationTime,
                     server_generation_time: data.generation_time,
-                    meal_type: data.recipe?.meal_type,
-                    cuisine_type: data.recipe?.cuisine_type,
-                    ingredients_count: data.recipe?.ingredients?.length || 0,
-                    instructions_count: data.recipe?.instructions?.length || 0,
-                    quality_score: data.quality?.score,
-                    nutrition_method: data.nutrition?.analysis_method,
+                    synchronous: true,
                     timestamp: new Date().toISOString()
                 });
                 
                 this.displayRecipe(data);
                 
-                // Show recent recipes section after first successful generation
                 if (!this.hasGeneratedFirstRecipe) {
                     this.hasGeneratedFirstRecipe = true;
                     this.showRecentRecipesSection();
                     
-                    // Track first recipe milestone
                     this.trackEvent('first_recipe_generated', {
                         recipe_title: data.recipe?.title,
                         complexity: complexity,
@@ -263,34 +261,336 @@ class RecipeGenerator {
                 }
                 
                 this.loadRecentRecipes();
+                this.hideLoading(); // Hide loading for synchronous response
             } else {
-                // Track recipe generation failure
                 this.trackEvent('recipe_generation_failed', {
                     recipe_request: request,
                     complexity: complexity,
-                    error: data.error,
-                    generation_time: (Date.now() - startTime) / 1000,
+                    error: data.error || 'Failed to generate recipe',
                     timestamp: new Date().toISOString()
                 });
                 
                 this.showError(data.error || 'Recipe generation failed');
+                this.hideLoading();
             }
+            
         } catch (error) {
             console.error('Error:', error);
             
-            // Track network/system errors
-            this.trackEvent('recipe_generation_error', {
-                recipe_request: request,
-                complexity: complexity,
-                error: error.message,
-                generation_time: (Date.now() - startTime) / 1000,
-                timestamp: new Date().toISOString()
-            });
+            // Try fallback to synchronous generation
+            try {
+                console.log('Trying synchronous fallback...');
+                const fallbackResponse = await fetch('/api/generate-recipe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        recipe_request: request,
+                        complexity: complexity,
+                        use_queue: false  // Disable queue for fallback
+                    })
+                });
+                
+                const fallbackData = await fallbackResponse.json();
+                
+                if (fallbackData.success) {
+                    const generationTime = (Date.now() - startTime) / 1000;
+                    
+                    this.trackEvent('recipe_generated_success', {
+                        recipe_title: fallbackData.recipe?.title,
+                        recipe_request: request,
+                        complexity: complexity,
+                        generation_time: generationTime,
+                        server_generation_time: fallbackData.generation_time,
+                        fallback_used: true,
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                    this.displayRecipe(fallbackData);
+                    
+                    if (!this.hasGeneratedFirstRecipe) {
+                        this.hasGeneratedFirstRecipe = true;
+                        this.showRecentRecipesSection();
+                    }
+                    
+                    this.loadRecentRecipes();
+                } else {
+                    throw new Error(fallbackData.error || 'Fallback generation failed');
+                }
+                
+            } catch (fallbackError) {
+                console.error('Fallback also failed:', fallbackError);
+                
+                this.trackEvent('recipe_generation_error', {
+                    recipe_request: request,
+                    complexity: complexity,
+                    error: error.message,
+                    fallback_error: fallbackError.message,
+                    generation_time: (Date.now() - startTime) / 1000,
+                    timestamp: new Date().toISOString()
+                });
+                
+                this.showError('Recipe generation failed. Please try again.');
+            }
             
-            this.showError('Network error. Please try again.');
-        } finally {
-            this.hideLoading();
+            this.hideLoading(); // Hide loading for any error path
         }
+    }
+    
+    async pollRecipeStatus(taskId, request, complexity, startTime) {
+        const maxPollingTime = 180000; // 3 minutes max
+        const pollInterval = 2000; // Poll every 2 seconds
+        let pollCount = 0;
+        
+        const poll = async () => {
+            try {
+                if (Date.now() - startTime > maxPollingTime) {
+                    throw new Error('Recipe generation timed out');
+                }
+                
+                console.log(`Polling status for task: ${taskId} (attempt ${pollCount + 1})`);
+                
+                const response = await fetch(`/api/recipe-status/${taskId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Status check failed:', response.status, errorText);
+                    throw new Error(`Status check failed: ${response.status}`);
+                }
+                
+                const status = await response.json();
+                console.log('Status response:', status);
+                
+                // Update progress display
+                this.updateProgress(status, pollCount);
+                
+                switch (status.status) {
+                    case 'completed':
+                        const generationTime = (Date.now() - startTime) / 1000;
+                        
+                        // Track successful completion
+                        this.trackEvent('recipe_generated_success', {
+                            recipe_title: status.result?.recipe?.title,
+                            recipe_request: request,
+                            complexity: complexity,
+                            generation_time: generationTime,
+                            server_generation_time: status.result?.generation_time,
+                            task_id: taskId,
+                            poll_count: pollCount,
+                            timestamp: new Date().toISOString()
+                        });
+                        
+                        this.displayRecipe(status);
+                        
+                        // Show recent recipes section after first successful generation
+                        if (!this.hasGeneratedFirstRecipe) {
+                            this.hasGeneratedFirstRecipe = true;
+                            this.showRecentRecipesSection();
+                            
+                            this.trackEvent('first_recipe_generated', {
+                                recipe_title: status.result?.recipe?.title,
+                                complexity: complexity,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                        
+                        this.loadRecentRecipes();
+                        this.hideLoading();
+                        break;
+                    
+                    case 'failed':
+                        this.trackEvent('recipe_generation_failed', {
+                            recipe_request: request,
+                            complexity: complexity,
+                            error: status.error,
+                            task_id: taskId,
+                            poll_count: pollCount,
+                            generation_time: (Date.now() - startTime) / 1000,
+                            timestamp: new Date().toISOString()
+                        });
+                        
+                        this.showError(status.error || 'Recipe generation failed');
+                        this.hideLoading();
+                        break;
+                    
+                    case 'processing':
+                    case 'queued':
+                        // Continue polling
+                        pollCount++;
+                        setTimeout(poll, pollInterval);
+                        break;
+                    
+                    default:
+                        console.warn(`Unknown status: ${status.status}`);
+                        // Continue polling for unknown statuses
+                        pollCount++;
+                        setTimeout(poll, pollInterval);
+                        break;
+                }
+                
+            } catch (error) {
+                console.error('Polling error:', error);
+                
+                // Try a few more times before giving up
+                if (pollCount < 3) {
+                    pollCount++;
+                    console.log(`Retrying poll in ${pollInterval}ms (attempt ${pollCount})`);
+                    setTimeout(poll, pollInterval);
+                    return;
+                }
+                
+                this.trackEvent('recipe_polling_error', {
+                    recipe_request: request,
+                    complexity: complexity,
+                    task_id: taskId,
+                    error: error.message,
+                    poll_count: pollCount,
+                    timestamp: new Date().toISOString()
+                });
+                
+                this.showError('Error checking recipe status. Trying synchronous generation...');
+                
+                // Fallback to synchronous generation
+                try {
+                    const fallbackResponse = await fetch('/api/generate-recipe', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ 
+                            recipe_request: request,
+                            complexity: complexity,
+                            use_queue: false
+                        })
+                    });
+                    
+                    const fallbackData = await fallbackResponse.json();
+                    
+                    if (fallbackData.success) {
+                        this.displayRecipe(fallbackData);
+                        
+                        if (!this.hasGeneratedFirstRecipe) {
+                            this.hasGeneratedFirstRecipe = true;
+                            this.showRecentRecipesSection();
+                        }
+                        
+                        this.loadRecentRecipes();
+                    } else {
+                        this.showError(fallbackData.error || 'Recipe generation failed');
+                    }
+                    
+                } catch (fallbackError) {
+                    console.error('Fallback generation failed:', fallbackError);
+                    this.showError('Recipe generation failed. Please try again.');
+                }
+                
+                this.hideLoading();
+            }
+        };
+        
+        // Start polling immediately
+        poll();
+    }
+    
+    updateProgress(status, pollCount) {
+        // Update progress based on status
+        let progressMessage = '';
+        let estimatedTime = '';
+        
+        if (status.status === 'queued') {
+            const position = status.queue_position || 1;
+            progressMessage = `⏳ Position ${position} in queue...`;
+            estimatedTime = `Estimated wait: ${position * 30}-${position * 45} seconds`;
+            
+            // Update progress log
+            const queueItem = document.createElement('div');
+            queueItem.className = 'progress-item in-progress';
+            queueItem.textContent = progressMessage;
+            
+            // Replace or add queue status
+            const existingQueue = this.progressLog.querySelector('.queue-status');
+            if (existingQueue) {
+                existingQueue.textContent = progressMessage;
+            } else {
+                queueItem.classList.add('queue-status');
+                this.progressLog.insertBefore(queueItem, this.progressLog.firstChild);
+            }
+            
+        } else if (status.status === 'processing') {
+            // Mark queue as completed
+            const queueItem = this.progressLog.querySelector('.queue-status');
+            if (queueItem) {
+                queueItem.className = 'progress-item completed';
+                queueItem.textContent = '⏳ Queue processed ✓';
+                queueItem.classList.remove('queue-status');
+            }
+            
+            // Update progress based on step
+            const step = status.progress?.step || 'processing';
+            const message = status.progress?.message || 'Processing recipe...';
+            
+            progressMessage = message;
+            
+            // Show advanced progress if available
+            if (message !== 'Processing recipe...') {
+                // Find or create progress item for this step
+                let stepItem = this.progressLog.querySelector(`[data-step="${step}"]`);
+                if (!stepItem) {
+                    stepItem = document.createElement('div');
+                    stepItem.className = 'progress-item in-progress';
+                    stepItem.setAttribute('data-step', step);
+                    this.progressLog.appendChild(stepItem);
+                }
+                stepItem.textContent = message;
+                
+                // Mark previous steps as completed
+                const allSteps = ['generating', 'researching', 'enhancing', 'analyzing'];
+                const currentIndex = allSteps.indexOf(step);
+                if (currentIndex > 0) {
+                    for (let i = 0; i < currentIndex; i++) {
+                        const prevStep = this.progressLog.querySelector(`[data-step="${allSteps[i]}"]`);
+                        if (prevStep && !prevStep.classList.contains('completed')) {
+                            prevStep.className = 'progress-item completed';
+                            prevStep.textContent += ' ✓';
+                        }
+                    }
+                }
+            }
+            
+            // Estimate remaining time based on step and poll count
+            const stepTimes = {
+                'generating': 15,
+                'researching': 20,
+                'enhancing': 15,
+                'analyzing': 10
+            };
+            const remainingTime = stepTimes[step] || 20;
+            estimatedTime = `Estimated completion: ${remainingTime} seconds`;
+        }
+        
+        // Update loading message if we have specific progress
+        if (progressMessage) {
+            const loadingHeader = this.loading.querySelector('.loading-header h3');
+            if (loadingHeader && progressMessage !== 'Processing recipe...') {
+                loadingHeader.textContent = progressMessage;
+            }
+            
+            if (estimatedTime) {
+                const loadingP = this.loading.querySelector('p');
+                if (loadingP) {
+                    loadingP.textContent = estimatedTime;
+                }
+            }
+        }
+        
+        // Auto-scroll progress log
+        this.progressLog.scrollTop = this.progressLog.scrollHeight;
     }
     
     showRecentRecipesSection() {
@@ -1091,7 +1391,7 @@ class RecipeGenerator {
             }
         `;
     }
-    
+        
     showError(message) {
         this.errorMessage.textContent = message;
         this.errorMessage.style.display = 'block';
