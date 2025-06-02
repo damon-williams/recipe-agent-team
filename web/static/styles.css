@@ -768,6 +768,10 @@ body {
     body {
         margin: 0 !important;
         padding: 0 !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
+        font-size: 11pt !important;
+        line-height: 1.4 !important;
+        color: #000 !important;
     }
     
     body * {
@@ -801,7 +805,7 @@ body {
         max-width: none !important;
         border-radius: 0 !important;
         font-size: 11pt;
-        line-height: 1.3;
+        line-height: 1.4;
         max-height: none !important;
         overflow: visible !important;
         position: static !important;
@@ -816,9 +820,9 @@ body {
         background: none !important;
         color: black !important;
         border-radius: 0 !important;
-        padding: 0 !important;
+        padding: 0 0 16pt 0 !important;
         margin: 0 !important;
-        border-bottom: none !important;
+        border-bottom: 2pt solid #333 !important;
         page-break-inside: avoid;
         position: static !important;
         top: 0 !important;
@@ -827,7 +831,7 @@ body {
     }
     
     .modal-body {
-        padding: 0 !important;
+        padding: 16pt 0 0 0 !important;
         margin: 0 !important;
         position: static !important;
         top: 0 !important;
@@ -839,33 +843,36 @@ body {
     }
     
     .recipe-header {
-        margin: 0 !important;
+        margin: 0 0 20pt 0 !important;
         padding: 0 !important;
         position: static !important;
         top: 0 !important;
         display: block !important;
         text-align: left !important;
+        page-break-after: avoid;
     }
     
     .recipe-title {
-        font-size: 16pt !important;
+        font-size: 18pt !important;
         color: black !important;
         page-break-after: avoid;
-        margin: 0 0 8pt 0 !important;
+        margin: 0 0 12pt 0 !important;
         padding: 0 !important;
         position: static !important;
         top: 0 !important;
         display: block !important;
-        font-weight: bold !important;
+        font-weight: 700 !important;
         line-height: 1.2 !important;
     }
     
     .recipe-description {
-        margin: 0 0 12pt 0 !important;
+        margin: 0 0 16pt 0 !important;
         padding: 0 !important;
-        font-size: 10pt !important;
-        line-height: 1.3 !important;
+        font-size: 11pt !important;
+        line-height: 1.4 !important;
         display: block !important;
+        font-style: italic !important;
+        color: #555 !important;
     }
     
     .recipe-meta {
@@ -873,7 +880,7 @@ body {
         page-break-after: avoid;
         display: block !important;
         visibility: visible !important;
-        margin: 0 0 15pt 0 !important;
+        margin: 0 0 20pt 0 !important;
         padding: 0 !important;
         font-size: 10pt !important;
     }
@@ -881,50 +888,52 @@ body {
     .meta-item {
         display: inline-block !important;
         visibility: visible !important;
-        margin: 0 10pt 5pt 0 !important;
-        padding: 3pt 6pt !important;
+        margin: 0 12pt 6pt 0 !important;
+        padding: 4pt 8pt !important;
         background: #f0f0f0 !important;
-        border-radius: 3pt !important;
-        font-size: 9pt !important;
+        border-radius: 4pt !important;
+        font-size: 10pt !important;
+        font-weight: 500 !important;
     }
     
     .quality-score {
         background: #667eea !important;
         color: white !important;
         display: inline-block !important;
-        padding: 3pt 6pt !important;
-        border-radius: 3pt !important;
-        font-size: 9pt !important;
+        padding: 4pt 8pt !important;
+        border-radius: 4pt !important;
+        font-size: 10pt !important;
     }
     
     .recipe-section {
         page-break-inside: avoid;
-        margin: 0 0 12pt 0 !important;
+        margin: 0 0 20pt 0 !important;
         padding: 0 !important;
         display: block !important;
         visibility: visible !important;
     }
     
     .section-title {
-        font-size: 12pt !important;
+        font-size: 14pt !important;
         color: black !important;
         page-break-after: avoid;
-        margin: 0 0 6pt 0 !important;
-        padding: 0 !important;
-        font-weight: bold !important;
+        margin: 0 0 10pt 0 !important;
+        padding: 0 0 4pt 0 !important;
+        font-weight: 700 !important;
         display: block !important;
+        border-bottom: 1pt solid #ccc !important;
     }
     
     .ingredient-item {
         background: #f8f9fa !important;
-        border-left: 2pt solid #667eea !important;
-        margin: 0 0 2pt 0 !important;
-        padding: 4pt 6pt !important;
+        border-left: 3pt solid #667eea !important;
+        margin: 0 0 3pt 0 !important;
+        padding: 6pt 10pt !important;
         page-break-inside: avoid;
         display: block !important;
         visibility: visible !important;
         font-size: 10pt !important;
-        line-height: 1.2 !important;
+        line-height: 1.3 !important;
     }
     
     .ingredients-grid {
@@ -937,13 +946,15 @@ body {
     .instruction-item {
         background: #f8f9fa !important;
         page-break-inside: avoid;
-        margin: 0 0 4pt 0 !important;
+        margin: 0 0 12pt 0 !important;
         display: block !important;
         visibility: visible !important;
         position: relative !important;
-        padding: 6pt 8pt 6pt 24pt !important;
-        font-size: 10pt !important;
-        line-height: 1.3 !important;
+        padding: 12pt 12pt 12pt 36pt !important;
+        font-size: 11pt !important;
+        line-height: 1.5 !important;
+        border-radius: 6pt !important;
+        border-left: 3pt solid #667eea !important;
     }
     
     .instructions-list {
@@ -960,14 +971,14 @@ body {
         color: white !important;
         display: flex !important;
         position: absolute !important;
-        left: 6pt !important;
-        top: 6pt !important;
-        width: 14pt !important;
-        height: 14pt !important;
+        left: 12pt !important;
+        top: 12pt !important;
+        width: 18pt !important;
+        height: 18pt !important;
         border-radius: 50% !important;
         align-items: center !important;
         justify-content: center !important;
-        font-size: 8pt !important;
+        font-size: 9pt !important;
         font-weight: bold !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -976,42 +987,45 @@ body {
     .nutrition-grid {
         display: grid !important;
         grid-template-columns: repeat(4, 1fr) !important;
-        gap: 8pt !important;
+        gap: 10pt !important;
         page-break-inside: avoid;
         visibility: visible !important;
-        margin: 0 !important;
+        margin: 0 0 16pt 0 !important;
         padding: 0 !important;
     }
     
     .nutrition-card {
         display: block !important;
         visibility: visible !important;
-        padding: 8pt !important;
+        padding: 10pt !important;
         margin: 0 !important;
         text-align: center !important;
         background: #f8f9fa !important;
-        border-radius: 4pt !important;
+        border-radius: 6pt !important;
+        border: 1pt solid #e9ecef !important;
     }
     
     .nutrition-value {
         color: #667eea !important;
-        font-size: 14pt !important;
+        font-size: 16pt !important;
         font-weight: bold !important;
         display: block !important;
+        margin: 0 0 2pt 0 !important;
     }
     
     .nutrition-label {
         font-size: 9pt !important;
         color: #666 !important;
         display: block !important;
-        margin-top: 2pt !important;
+        margin: 0 !important;
+        font-weight: 500 !important;
     }
     
     .tags {
         page-break-inside: avoid;
         display: block !important;
         visibility: visible !important;
-        margin: 8pt 0 !important;
+        margin: 12pt 0 !important;
         padding: 0 !important;
     }
     
@@ -1020,80 +1034,85 @@ body {
         color: white !important;
         display: inline-block !important;
         visibility: visible !important;
-        padding: 2pt 6pt !important;
-        margin: 0 3pt 3pt 0 !important;
-        border-radius: 2pt !important;
-        font-size: 8pt !important;
+        padding: 3pt 8pt !important;
+        margin: 0 4pt 4pt 0 !important;
+        border-radius: 3pt !important;
+        font-size: 9pt !important;
+        font-weight: 500 !important;
     }
     
     .enhancement-list {
         display: block !important;
         visibility: visible !important;
-        margin: 0 !important;
-        padding: 8pt !important;
+        margin: 0 0 16pt 0 !important;
+        padding: 12pt !important;
         background: #f0f8f0 !important;
-        border-left: 3pt solid #28a745 !important;
-        border-radius: 3pt !important;
+        border-left: 4pt solid #28a745 !important;
+        border-radius: 6pt !important;
+        page-break-inside: avoid;
     }
     
     .enhancement-list ul {
         display: block !important;
         visibility: visible !important;
         margin: 0 !important;
-        padding-left: 12pt !important;
+        padding-left: 16pt !important;
     }
     
     .enhancement-list li {
         display: list-item !important;
         visibility: visible !important;
-        margin: 0 0 3pt 0 !important;
+        margin: 0 0 4pt 0 !important;
         padding: 0 !important;
-        font-size: 9pt !important;
-        line-height: 1.3 !important;
+        font-size: 10pt !important;
+        line-height: 1.4 !important;
     }
     
     .health-insights {
         display: block !important;
         visibility: visible !important;
-        margin: 0 !important;
-        padding: 8pt !important;
+        margin: 0 0 16pt 0 !important;
+        padding: 12pt !important;
         background: #f0f8ff !important;
-        border-left: 3pt solid #2196f3 !important;
-        border-radius: 3pt !important;
+        border-left: 4pt solid #2196f3 !important;
+        border-radius: 6pt !important;
+        page-break-inside: avoid;
     }
     
     .health-insights h3 {
-        font-size: 10pt !important;
-        margin: 0 0 4pt 0 !important;
+        font-size: 11pt !important;
+        margin: 0 0 6pt 0 !important;
         color: #1976d2 !important;
+        font-weight: 600 !important;
     }
     
     .health-insights ul {
         display: block !important;
         visibility: visible !important;
         margin: 0 !important;
-        padding-left: 12pt !important;
+        padding-left: 16pt !important;
     }
     
     .health-insights li {
         display: list-item !important;
         visibility: visible !important;
-        margin: 0 0 3pt 0 !important;
+        margin: 0 0 4pt 0 !important;
         padding: 0 !important;
-        font-size: 9pt !important;
-        line-height: 1.3 !important;
+        font-size: 10pt !important;
+        line-height: 1.4 !important;
     }
     
     .generation-stats {
         page-break-inside: avoid;
-        font-size: 8pt !important;
+        font-size: 9pt !important;
         color: #666 !important;
         display: block !important;
         visibility: visible !important;
-        margin: 8pt 0 0 0 !important;
-        padding: 6pt !important;
+        margin: 16pt 0 0 0 !important;
+        padding: 8pt !important;
         background: #f8f8f8 !important;
-        border-radius: 3pt !important;
+        border-radius: 4pt !important;
+        border-top: 1pt solid #ddd !important;
     }
     
     /* Prevent orphaned content */
