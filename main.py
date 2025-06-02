@@ -8,7 +8,13 @@ from typing import Dict, List
 from queue import Queue, Empty
 from dataclasses import dataclass
 from enum import Enum
+import logging
+import signal
+import atexit
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 class TaskStatus(Enum):
     QUEUED = "queued"
     PROCESSING = "processing"
@@ -35,11 +41,101 @@ class SimpleRecipeQueue:
         self.lock = threading.Lock()
         self.worker_thread = None
         self.running = True
+        self.startup_complete = False
         
-        # Start worker thread
-        self._start_worker()
+        logger.info(f"🚀 Initializing queue with max_concurrent={max_concurrent}")
         
+        # Setup graceful shutdown handlers
+        self._setup_graceful_shutdown()
+        
+        # DON'T start worker immediately - wait for first request to avoid startup race condition
+        logger.info("⏰ Queue initialized, worker will start on first request")
+        
+    def _ensure_worker_started(self):
+        """Ensure worker is started when needed (lazy startup to avoid race conditions)"""
+        if not self.startup_complete:
+            with self.lock:
+                if not self.startup_complete:  # Double-check locking pattern
+                    self._start_worker_delayed()
+                    self.startup_complete = True
+    
+    def _start_worker_delayed(self):
+        """Start worker with better timing after app is fully loaded"""
+        
+        def worker():
+            logger.info("🔄 Queue worker thread starting (delayed startup)...")
+            
+            # Longer delay to ensure all imports and app initialization are complete
+            time.sleep(5)
+            
+            while self.running:
+                try:
+                    # Check if we can process more tasks
+                    with self.lock:
+                        current_processing = self.processing_count
+                    
+                    if current_processing >= self.max_concurrent:
+                        logger.debug(f"🔄 At max capacity ({current_processing}/{self.max_concurrent})")
+                        time.sleep(1)
+                        continue
+                    
+                    # Get next task
+                    try:
+                        task = self.queue.get(timeout=1)
+                        logger.info(f"🎯 Worker got task: {task.task_id}")
+                    except Empty:
+                        continue
+                    
+                    # Process in separate thread to maintain concurrency
+                    try:
+                        process_thread = threading.Thread(
+                            target=self._process_task_safe, 
+                            args=(task,),
+                            daemon=False,  # Non-daemon so gthread won't kill it
+                            name=f"RecipeProcessor-{task.task_id[:8]}"
+                        )
+                        process_thread.start()
+                        logger.info(f"🚀 Started processing thread for {task.task_id}")
+                    except Exception as thread_error:
+                        logger.error(f"❌ Failed to start processing thread: {str(thread_error)}")
+                        # Mark task as failed if we can't start processing thread
+                        with self.lock:
+                            task.status = TaskStatus.FAILED
+                            task.error = f"Failed to start processing: {str(thread_error)}"
+                    
+                except Exception as e:
+                    logger.error(f"❌ Worker loop error: {str(e)}")
+                    logger.error(traceback.format_exc())
+                    # Don't crash the worker, just wait and continue
+                    time.sleep(5)
+            
+            logger.info("🔄 Queue worker thread stopped")
+        
+        try:
+            self.worker_thread = threading.Thread(
+                target=worker, 
+                daemon=False,  # Non-daemon thread so it survives gthread worker
+                name="QueueWorker"
+            )
+            self.worker_thread.start()
+            
+            # Verify the thread started successfully
+            time.sleep(0.1)
+            if self.worker_thread.is_alive():
+                logger.info("✅ Delayed queue worker started successfully")
+            else:
+                logger.error("❌ Delayed queue worker failed to start")
+                
+        except Exception as e:
+            logger.error(f"❌ Failed to create delayed worker thread: {str(e)}")
+            logger.error(traceback.format_exc())
+    
     def add_task(self, user_request: str, complexity: str) -> str:
+        """Add task to queue and ensure worker is started"""
+        
+        # Ensure worker is running before adding tasks (lazy startup)
+        self._ensure_worker_started()
+        
         task_id = str(uuid.uuid4())
         task = RecipeTask(
             task_id=task_id,
@@ -55,18 +151,22 @@ class SimpleRecipeQueue:
             
         try:
             self.queue.put(task, timeout=1)
+            logger.info(f"✅ Task queued: {task_id} for '{user_request}'")
             return task_id
         except:
             # Queue full
             task.status = TaskStatus.FAILED
             task.error = "Queue is full, please try again later"
+            logger.error(f"❌ Queue full, failed to add task: {task_id}")
             return task_id
     
     def get_task_status(self, task_id: str) -> Dict:
+        """Get status of a queued/processing recipe"""
         with self.lock:
             task = self.tasks.get(task_id)
             
         if not task:
+            logger.warning(f"⚠️ Task not found: {task_id}")
             return {"error": "Task not found"}
         
         queue_position = None
@@ -83,6 +183,7 @@ class SimpleRecipeQueue:
         }
     
     def _get_queue_position(self, task_id: str) -> int:
+        """Calculate position in queue for a given task"""
         position = 1
         with self.lock:
             target_task = self.tasks.get(task_id)
@@ -95,72 +196,9 @@ class SimpleRecipeQueue:
                     position += 1
         return position
     
-    def _start_worker(self):
-        def worker():
-            print("🔄 Queue worker thread starting...")
-            
-            # Add startup delay to ensure all imports are ready
-            time.sleep(2)
-            
-            while self.running:
-                try:
-                    # Check if we can process more tasks
-                    with self.lock:
-                        current_processing = self.processing_count
-                    
-                    if current_processing >= self.max_concurrent:
-                        time.sleep(1)
-                        continue
-                    
-                    # Get next task with shorter timeout to avoid blocking
-                    try:
-                        task = self.queue.get(timeout=0.5)  # Shorter timeout
-                        print(f"🎯 Worker got task: {task.task_id}")
-                    except Empty:
-                        continue
-                    
-                    # Process in separate thread to maintain concurrency
-                    try:
-                        process_thread = threading.Thread(
-                            target=self._process_task_safe, 
-                            args=(task,),
-                            daemon=True,
-                            name=f"RecipeProcessor-{task.task_id[:8]}"
-                        )
-                        process_thread.start()
-                        print(f"🚀 Started processing thread for {task.task_id}")
-                    except Exception as thread_error:
-                        print(f"❌ Failed to start processing thread: {str(thread_error)}")
-                        # Mark task as failed
-                        with self.lock:
-                            task.status = TaskStatus.FAILED
-                            task.error = f"Failed to start processing: {str(thread_error)}"
-                    
-                except Exception as e:
-                    print(f"❌ Worker loop error: {str(e)}")
-                    print(traceback.format_exc())
-                    # Don't crash the worker, just wait and continue
-                    time.sleep(5)
-            
-            print("🔄 Queue worker thread stopped")
-        
-        try:
-            self.worker_thread = threading.Thread(target=worker, daemon=True, name="QueueWorker")
-            self.worker_thread.start()
-            
-            # Verify the thread started successfully
-            time.sleep(0.1)
-            if self.worker_thread.is_alive():
-                print("✅ Queue worker started successfully")
-            else:
-                print("❌ Queue worker failed to start")
-                
-        except Exception as e:
-            print(f"❌ Failed to create worker thread: {str(e)}")
-            print(traceback.format_exc())
-
     def _process_task_safe(self, task: RecipeTask):
         """Ultra-safe task processing that never crashes the worker"""
+        thread_name = threading.current_thread().name
         
         try:
             with self.lock:
@@ -168,7 +206,7 @@ class SimpleRecipeQueue:
                 task.status = TaskStatus.PROCESSING
                 task.progress = {"step": "processing", "message": "Starting recipe generation..."}
             
-            print(f"🎯 Processing task: {task.task_id} for '{task.user_request}'")
+            logger.info(f"🎯 [{thread_name}] Processing task: {task.task_id} for '{task.user_request}'")
             
             # Try to run the full pipeline
             result = self._run_minimal_pipeline(task)
@@ -178,11 +216,11 @@ class SimpleRecipeQueue:
                 task.result = result
                 task.progress = {"step": "completed", "message": "Recipe generation complete!"}
             
-            print(f"✅ Task completed: {task.task_id}")
+            logger.info(f"✅ [{thread_name}] Task completed: {task.task_id}")
             
         except Exception as e:
-            print(f"❌ Task processing failed: {task.task_id} - {str(e)}")
-            print(traceback.format_exc())
+            logger.error(f"❌ [{thread_name}] Task processing failed: {task.task_id} - {str(e)}")
+            logger.error(traceback.format_exc())
             
             # Always mark as failed rather than crash
             with self.lock:
@@ -194,8 +232,8 @@ class SimpleRecipeQueue:
             # ALWAYS decrement the processing count
             with self.lock:
                 self.processing_count -= 1
-            print(f"🔄 Processing count after task {task.task_id}: {self.processing_count}")
-
+            logger.info(f"🔄 [{thread_name}] Processing count after task {task.task_id}: {self.processing_count}")
+    
     def _run_minimal_pipeline(self, task):
         """Minimal pipeline that works even if agents fail to import"""
         
@@ -203,9 +241,6 @@ class SimpleRecipeQueue:
         
         # Try to use agents, but fall back to basic generation if imports fail
         try:
-            # Only import what we absolutely need
-            print("🔄 Attempting to import recipe generator...")
-            
             # Try importing in the safest way possible
             import sys
             import os
@@ -219,7 +254,7 @@ class SimpleRecipeQueue:
             from recipe_generator import RecipeGenerator
             generator = RecipeGenerator()
             
-            print("✅ Generator imported successfully")
+            logger.info("✅ Generator imported successfully")
             
             # Generate base recipe
             task.progress = {"step": "generating", "message": "🤖 Creating recipe..."}
@@ -228,24 +263,45 @@ class SimpleRecipeQueue:
             if not base_recipe.get('success'):
                 raise Exception("Generator failed")
             
-            print(f"✅ Generated: {base_recipe.get('title', 'Unknown')}")
+            logger.info(f"✅ Generated: {base_recipe.get('title', 'Unknown')}")
             
             # Try enhancement if possible
             try:
                 from recipe_enhancer import RecipeEnhancer
                 enhancer = RecipeEnhancer()
                 enhanced_recipe = enhancer.enhance_recipe(base_recipe, None, task.complexity)
-                print("✅ Enhancement successful")
+                logger.info("✅ Enhancement successful")
             except Exception as e:
-                print(f"⚠️ Enhancement failed, using base recipe: {str(e)}")
+                logger.warning(f"⚠️ Enhancement failed, using base recipe: {str(e)}")
                 enhanced_recipe = base_recipe
             
-            # Create basic result
+            # Try other agents with fallbacks
+            nutrition_data = None
+            try:
+                from nutrition_analyst import NutritionAnalyst
+                analyst = NutritionAnalyst()
+                nutrition_data = analyst.analyze_nutrition(enhanced_recipe)
+                logger.info("✅ Nutrition analysis successful")
+            except Exception as e:
+                logger.warning(f"⚠️ Nutrition analysis failed: {str(e)}")
+                nutrition_data = self._create_fallback_nutrition(enhanced_recipe)
+            
+            quality_data = None
+            try:
+                from quality_evaluator import QualityEvaluator
+                evaluator = QualityEvaluator()
+                quality_data = evaluator.evaluate_recipe(enhanced_recipe, nutrition_data, None, task.complexity)
+                logger.info("✅ Quality evaluation successful")
+            except Exception as e:
+                logger.warning(f"⚠️ Quality evaluation failed: {str(e)}")
+                quality_data = self._create_fallback_quality()
+            
+            # Create result
             result = {
                 'success': True,
                 'recipe': enhanced_recipe,
-                'nutrition': self._create_fallback_nutrition(enhanced_recipe),
-                'quality': self._create_fallback_quality(),
+                'nutrition': nutrition_data,
+                'quality': quality_data,
                 'iterations': 1,
                 'complexity_requested': task.complexity,
                 'generation_time': int(time.time() - start_time),
@@ -255,8 +311,8 @@ class SimpleRecipeQueue:
             return result
             
         except Exception as e:
-            print(f"❌ Full pipeline failed: {str(e)}")
-            print(traceback.format_exc())
+            logger.error(f"❌ Full pipeline failed: {str(e)}")
+            logger.error(traceback.format_exc())
             
             # Ultimate fallback - create a basic recipe without any agents
             return {
@@ -292,250 +348,6 @@ class SimpleRecipeQueue:
                 'fallback_used': True,
                 'error_handled': str(e)
             }
-    
-    def _process_task(self, task: RecipeTask):
-        """Process individual recipe generation task with robust error handling"""
-        thread_name = threading.current_thread().name
-        
-        try:
-            with self.lock:
-                self.processing_count += 1
-                task.status = TaskStatus.PROCESSING
-                task.progress = {"step": "processing", "message": "Starting recipe generation..."}
-            
-            print(f"🎯 [{thread_name}] Processing task: {task.task_id} for '{task.user_request}'")
-            
-            # Pre-import all agents with individual error handling
-            agents = {}
-            agent_classes = {
-                'generator': 'recipe_generator.RecipeGenerator',
-                'enhancer': 'recipe_enhancer.RecipeEnhancer', 
-                'researcher': 'web_researcher.WebResearcher',
-                'nutrition_analyst': 'nutrition_analyst.NutritionAnalyst',
-                'quality_evaluator': 'quality_evaluator.QualityEvaluator'
-            }
-            
-            for agent_name, import_path in agent_classes.items():
-                try:
-                    module_name, class_name = import_path.split('.')
-                    module = __import__(module_name, fromlist=[class_name])
-                    agent_class = getattr(module, class_name)
-                    agents[agent_name] = agent_class()
-                    print(f"✅ [{thread_name}] Imported {agent_name}")
-                except Exception as e:
-                    print(f"❌ [{thread_name}] Failed to import {agent_name}: {str(e)}")
-                    # Continue without this agent - use fallbacks
-                    agents[agent_name] = None
-            
-            # Run pipeline with available agents
-            result = self._run_robust_pipeline(task, agents)
-            
-            with self.lock:
-                task.status = TaskStatus.COMPLETED
-                task.result = result
-                task.progress = {"step": "completed", "message": "Recipe generation complete!"}
-            
-            print(f"✅ [{thread_name}] Task completed: {task.task_id}")
-            
-        except Exception as e:
-            print(f"❌ [{thread_name}] Task failed: {task.task_id} - {str(e)}")
-            traceback.print_exc()
-            
-            with self.lock:
-                task.status = TaskStatus.FAILED
-                task.error = str(e)
-                task.progress = {"step": "failed", "message": f"Generation failed: {str(e)}"}
-            
-        finally:
-            with self.lock:
-                self.processing_count -= 1
-            print(f"🔄 [{thread_name}] Processing count after task {task.task_id}: {self.processing_count}")
-
-    def _run_robust_pipeline(self, task, agents):
-        """Run the recipe generation pipeline with graceful agent failures"""
-        
-        start_time = time.time()
-        
-        # Step 1: Generate base recipe (REQUIRED)
-        task.progress = {"step": "generating", "message": "🤖 Creating base recipe..."}
-        
-        if agents['generator']:
-            base_recipe = agents['generator'].create_recipe(task.user_request, task.complexity)
-        else:
-            # Fallback: create a basic recipe structure
-            base_recipe = self._create_fallback_recipe(task.user_request, task.complexity)
-        
-        if not base_recipe.get('success'):
-            raise Exception(base_recipe.get('error', 'Recipe generation failed'))
-        
-        base_recipe['requested_complexity'] = task.complexity
-        
-        # Step 2: Research inspiration (OPTIONAL)
-        task.progress = {"step": "researching", "message": "🔍 Finding cooking inspiration..."}
-        
-        inspiration_data = None
-        if agents['researcher']:
-            try:
-                inspiration_data = agents['researcher'].find_inspiration(
-                    base_recipe.get('title', ''), 
-                    base_recipe.get('meal_type')
-                )
-            except Exception as e:
-                print(f"⚠️ Research failed: {str(e)}")
-                inspiration_data = None
-        
-        # Step 3: Enhance recipe (OPTIONAL)
-        task.progress = {"step": "enhancing", "message": "📝 Adding creative improvements..."}
-        
-        enhanced_recipe = base_recipe
-        if agents['enhancer']:
-            try:
-                enhanced_recipe = agents['enhancer'].enhance_recipe(base_recipe, inspiration_data, task.complexity)
-            except Exception as e:
-                print(f"⚠️ Enhancement failed: {str(e)}")
-                enhanced_recipe = base_recipe
-        
-        # Step 4: Analyze nutrition (OPTIONAL)
-        task.progress = {"step": "analyzing", "message": "🥗 Calculating nutrition..."}
-        
-        nutrition_data = None
-        if agents['nutrition_analyst']:
-            try:
-                nutrition_data = agents['nutrition_analyst'].analyze_nutrition(enhanced_recipe)
-            except Exception as e:
-                print(f"⚠️ Nutrition analysis failed: {str(e)}")
-                nutrition_data = self._create_fallback_nutrition(enhanced_recipe)
-        else:
-            nutrition_data = self._create_fallback_nutrition(enhanced_recipe)
-        
-        # Step 5: Evaluate quality (OPTIONAL)
-        task.progress = {"step": "evaluating", "message": "⭐ Scoring recipe quality..."}
-        
-        quality_data = None
-        if agents['quality_evaluator']:
-            try:
-                quality_data = agents['quality_evaluator'].evaluate_recipe(
-                    enhanced_recipe, 
-                    nutrition_data, 
-                    inspiration_data,
-                    task.complexity
-                )
-            except Exception as e:
-                print(f"⚠️ Quality evaluation failed: {str(e)}")
-                quality_data = self._create_fallback_quality()
-        else:
-            quality_data = self._create_fallback_quality()
-        
-        # Final result
-        total_time = int(time.time() - start_time)
-        
-        return {
-            'success': True,
-            'recipe': enhanced_recipe,
-            'nutrition': nutrition_data,
-            'quality': quality_data,
-            'iterations': 1,
-            'complexity_requested': task.complexity,
-            'generation_time': total_time,
-            'inspiration_used': inspiration_data is not None,
-            'agents_used': [name for name, agent in agents.items() if agent is not None]
-        }
-
-    def _create_fallback_recipe(self, user_request: str, complexity: str) -> Dict:
-        """Create a basic recipe when generator fails"""
-        return {
-            'success': True,
-            'title': f"Basic {user_request.title()}",
-            'description': f"A simple {user_request} recipe",
-            'ingredients': ["Main ingredients for " + user_request],
-            'instructions': ["Basic cooking instructions"],
-            'prep_time': "15 minutes",
-            'cook_time': "20 minutes", 
-            'total_time': "35 minutes",
-            'servings': "4",
-            'difficulty': complexity,
-            'tags': [user_request.lower(), "simple"],
-            'cuisine_type': "Various",
-            'meal_type': "dinner"
-        }
-    
-    def _run_pipeline(self, task, generator, enhancer, researcher, nutrition_analyst, quality_evaluator):
-        """Run the recipe generation pipeline"""
-        
-        start_time = time.time()
-        
-        # Step 1: Generate base recipe
-        task.progress = {"step": "generating", "message": "🤖 Creating base recipe..."}
-        
-        base_recipe = generator.create_recipe(task.user_request, task.complexity)
-        
-        if not base_recipe.get('success'):
-            raise Exception(base_recipe.get('error', 'Recipe generation failed'))
-        
-        base_recipe['requested_complexity'] = task.complexity
-        
-        # Step 2: Research inspiration (with timeout)
-        task.progress = {"step": "researching", "message": "🔍 Finding cooking inspiration..."}
-        
-        inspiration_data = None
-        try:
-            inspiration_data = researcher.find_inspiration(
-                base_recipe.get('title', ''), 
-                base_recipe.get('meal_type')
-            )
-        except Exception as e:
-            print(f"⚠️ Research failed: {str(e)}")
-            inspiration_data = None
-        
-        # Step 3: Enhance recipe
-        task.progress = {"step": "enhancing", "message": "📝 Adding creative improvements..."}
-        
-        enhanced_recipe = base_recipe
-        try:
-            # Use the fixed method signature with complexity parameter
-            enhanced_recipe = enhancer.enhance_recipe(base_recipe, inspiration_data, task.complexity)
-        except Exception as e:
-            print(f"⚠️ Enhancement failed: {str(e)}")
-            enhanced_recipe = base_recipe
-        
-        # Step 4: Analyze nutrition
-        task.progress = {"step": "analyzing", "message": "🥗 Calculating nutrition..."}
-        
-        nutrition_data = None
-        try:
-            nutrition_data = nutrition_analyst.analyze_nutrition(enhanced_recipe)
-        except Exception as e:
-            print(f"⚠️ Nutrition analysis failed: {str(e)}")
-            nutrition_data = self._create_fallback_nutrition(enhanced_recipe)
-        
-        # Step 5: Evaluate quality
-        task.progress = {"step": "evaluating", "message": "⭐ Scoring recipe quality..."}
-        
-        quality_data = None
-        try:
-            quality_data = quality_evaluator.evaluate_recipe(
-                enhanced_recipe, 
-                nutrition_data, 
-                inspiration_data,
-                task.complexity
-            )
-        except Exception as e:
-            print(f"⚠️ Quality evaluation failed: {str(e)}")
-            quality_data = self._create_fallback_quality()
-        
-        # Final result
-        total_time = int(time.time() - start_time)
-        
-        return {
-            'success': True,
-            'recipe': enhanced_recipe,
-            'nutrition': nutrition_data,
-            'quality': quality_data,
-            'iterations': 1,
-            'complexity_requested': task.complexity,
-            'generation_time': total_time,
-            'inspiration_used': inspiration_data is not None
-        }
     
     def _create_fallback_nutrition(self, recipe: Dict) -> Dict:
         """Create basic nutrition estimates when analysis fails"""
@@ -595,9 +407,68 @@ class SimpleRecipeQueue:
         from datetime import datetime
         return datetime.now().isoformat()
     
+    def get_queue_stats(self) -> Dict:
+        """Get queue statistics for debugging"""
+        with self.lock:
+            return {
+                'processing_count': self.processing_count,
+                'max_concurrent': self.max_concurrent,
+                'total_tasks': len(self.tasks),
+                'queue_size': self.queue.qsize(),
+                'worker_alive': self.worker_thread.is_alive() if self.worker_thread else False,
+                'startup_complete': self.startup_complete,
+                'tasks_by_status': {
+                    status.value: len([t for t in self.tasks.values() if t.status == status])
+                    for status in TaskStatus
+                }
+            }
+    
+    def _setup_graceful_shutdown(self):
+        """Setup graceful shutdown for the worker thread"""
+        
+        def shutdown_handler(signum=None, frame=None):
+            logger.info("🛑 Shutting down queue worker...")
+            self.running = False
+            if self.worker_thread and self.worker_thread.is_alive():
+                self.worker_thread.join(timeout=5)
+            logger.info("🛑 Queue worker shutdown complete")
+        
+        # Register shutdown handlers
+        try:
+            signal.signal(signal.SIGTERM, shutdown_handler)
+            signal.signal(signal.SIGINT, shutdown_handler)
+            atexit.register(shutdown_handler)
+        except Exception as e:
+            logger.warning(f"⚠️ Could not setup signal handlers: {str(e)}")
+    
+    def restart_worker(self):
+        """Restart the worker thread (for debugging/recovery)"""
+        logger.info("🔄 Restarting worker thread...")
+        
+        # Stop the old worker
+        self.running = False
+        if self.worker_thread and self.worker_thread.is_alive():
+            self.worker_thread.join(timeout=5)
+        
+        # Reset state
+        self.running = True
+        self.startup_complete = False
+        
+        # Start new worker
+        self._ensure_worker_started()
+        
+        return {
+            'success': True,
+            'worker_alive': self.worker_thread.is_alive() if self.worker_thread else False
+        }
+    
     def shutdown(self):
         """Shutdown the queue worker"""
+        logger.info("🛑 Shutting down queue...")
         self.running = False
+        if self.worker_thread and self.worker_thread.is_alive():
+            self.worker_thread.join(timeout=10)
+        logger.info("🛑 Queue shutdown complete")
 
 class RecipeAgentTeam:
     def __init__(self):
