@@ -214,6 +214,8 @@ class RecipeGenerator {
         
         const startTime = Date.now();
         
+        toggleViewRecipesLink(true); // Hide View Recipes link
+
         try {
             // First, try queued generation for better performance
             const response = await fetch('/api/generate-recipe', {
@@ -332,6 +334,12 @@ class RecipeGenerator {
                 });
                 
                 this.showError('Recipe generation failed. Please try again.');
+            }
+            finally {
+                // Always show View Recipes link again after generation (success or failure)
+                setTimeout(() => {
+                    toggleViewRecipesLink(false);
+                }, 2000); // Small delay so user sees the result first
             }
             
             this.hideLoading(); // Hide loading for any error path
@@ -497,100 +505,84 @@ class RecipeGenerator {
         // Start polling immediately
         poll();
     }
-    
-    updateProgress(status, pollCount) {
-        // Update progress based on status
-        let progressMessage = '';
-        let estimatedTime = '';
+
+    // Hide/show View Recipes link during generation
+    function toggleViewRecipesLink(hide = false) {
+        const viewRecipesLink = document.querySelector('a[href="#recent-recipes"]');
+        const viewRecipesButton = document.querySelector('button[onclick*="showRecentRecipes"]');
+        const viewRecipesElements = document.querySelectorAll('[data-action="view-recipes"]');
         
-        if (status.status === 'queued') {
-            const position = status.queue_position || 1;
-            progressMessage = `⏳ Position ${position} in queue...`;
-            estimatedTime = `Estimated wait: ${position * 30}-${position * 45} seconds`;
-            
-            // Update progress log
-            const queueItem = document.createElement('div');
-            queueItem.className = 'progress-item in-progress';
-            queueItem.textContent = progressMessage;
-            
-            // Replace or add queue status
-            const existingQueue = this.progressLog.querySelector('.queue-status');
-            if (existingQueue) {
-                existingQueue.textContent = progressMessage;
-            } else {
-                queueItem.classList.add('queue-status');
-                this.progressLog.insertBefore(queueItem, this.progressLog.firstChild);
+        // Hide/show any element that links to viewing recipes
+        [viewRecipesLink, viewRecipesButton, ...viewRecipesElements].forEach(element => {
+            if (element) {
+                element.style.display = hide ? 'none' : '';
             }
-            
-        } else if (status.status === 'processing') {
-            // Mark queue as completed
-            const queueItem = this.progressLog.querySelector('.queue-status');
-            if (queueItem) {
-                queueItem.className = 'progress-item completed';
-                queueItem.textContent = '⏳ Queue processed ✓';
-                queueItem.classList.remove('queue-status');
-            }
-            
-            // Update progress based on step
-            const step = status.progress?.step || 'processing';
-            const message = status.progress?.message || 'Processing recipe...';
-            
-            progressMessage = message;
-            
-            // Show advanced progress if available
-            if (message !== 'Processing recipe...') {
-                // Find or create progress item for this step
-                let stepItem = this.progressLog.querySelector(`[data-step="${step}"]`);
-                if (!stepItem) {
-                    stepItem = document.createElement('div');
-                    stepItem.className = 'progress-item in-progress';
-                    stepItem.setAttribute('data-step', step);
-                    this.progressLog.appendChild(stepItem);
-                }
-                stepItem.textContent = message;
+        });
+    }
+
+    function updateProgress(status, startTime) {
+        const progressDiv = document.getElementById('generation-progress');
+        const statusDiv = document.getElementById('generation-status');
+        
+        if (!progressDiv || !statusDiv) return;
+        
+        // Get the progress message (keep the useful agent messages)
+        const progressMessage = status.progress?.message || 'Processing your recipe...';
+        
+        // Simple status updates without queue position or time estimates
+        let statusText = '';
+        let progressClass = '';
+        
+        switch (status.status) {
+            case 'queued':
+                statusText = 'Your recipe is being prepared...';
+                progressClass = 'status-queued';
+                break;
                 
-                // Mark previous steps as completed
-                const allSteps = ['generating', 'researching', 'enhancing', 'analyzing'];
-                const currentIndex = allSteps.indexOf(step);
-                if (currentIndex > 0) {
-                    for (let i = 0; i < currentIndex; i++) {
-                        const prevStep = this.progressLog.querySelector(`[data-step="${allSteps[i]}"]`);
-                        if (prevStep && !prevStep.classList.contains('completed')) {
-                            prevStep.className = 'progress-item completed';
-                            prevStep.textContent += ' ✓';
-                        }
-                    }
-                }
-            }
-            
-            // Estimate remaining time based on step and poll count
-            const stepTimes = {
-                'generating': 15,
-                'researching': 20,
-                'enhancing': 15,
-                'analyzing': 10
-            };
-            const remainingTime = stepTimes[step] || 20;
-            estimatedTime = `Estimated completion: ${remainingTime} seconds`;
+            case 'processing':
+                statusText = progressMessage; // Keep the useful agent messages like "🤖 Creating recipe..."
+                progressClass = 'status-processing';
+                break;
+                
+            case 'completed':
+                statusText = 'Recipe complete! 🎉';
+                progressClass = 'status-completed';
+                break;
+                
+            case 'failed':
+                statusText = 'Recipe generation failed. Please try again.';
+                progressClass = 'status-failed';
+                break;
+                
+            default:
+                statusText = 'Processing your recipe...';
+                progressClass = 'status-processing';
         }
         
-        // Update loading message if we have specific progress
-        if (progressMessage) {
-            const loadingHeader = this.loading.querySelector('.loading-header h3');
-            if (loadingHeader && progressMessage !== 'Processing recipe...') {
-                loadingHeader.textContent = progressMessage;
-            }
-            
-            if (estimatedTime) {
-                const loadingP = this.loading.querySelector('p');
-                if (loadingP) {
-                    loadingP.textContent = estimatedTime;
-                }
+        // Update the UI with clean, simple messaging
+        statusDiv.textContent = statusText;
+        statusDiv.className = `generation-status ${progressClass}`;
+        
+        // Show simple time context only for processing (remove specific estimates)
+        if (status.status === 'processing') {
+            const timeContext = document.getElementById('time-context');
+            if (timeContext) {
+                timeContext.textContent = 'This usually takes 1-2 minutes';
+                timeContext.style.display = 'block';
             }
         }
         
-        // Auto-scroll progress log
-        this.progressLog.scrollTop = this.progressLog.scrollHeight;
+        // Remove any queue position displays that might exist
+        const queuePositionDiv = document.getElementById('queue-position');
+        if (queuePositionDiv) {
+            queuePositionDiv.style.display = 'none';
+        }
+        
+        // Remove any estimated time displays that might exist  
+        const estimatedTimeDiv = document.getElementById('estimated-time');
+        if (estimatedTimeDiv) {
+            estimatedTimeDiv.style.display = 'none';
+        }
     }
     
     showRecentRecipesSection() {
