@@ -346,6 +346,71 @@ class RecipeGenerator {
         }
     }
     
+    updateProgress(status, startTime) {  // ← Note: NO 'function' keyword inside class
+        const progressDiv = document.getElementById('generation-progress');
+        const statusDiv = document.getElementById('generation-status');
+        
+        if (!progressDiv || !statusDiv) return;
+        
+        // Get the progress message (keep the useful agent messages)
+        const progressMessage = status.progress?.message || 'Processing your recipe...';
+        
+        // Simple status updates without queue position or time estimates
+        let statusText = '';
+        let progressClass = '';
+        
+        switch (status.status) {
+            case 'queued':
+                statusText = 'Your recipe is being prepared...';
+                progressClass = 'status-queued';
+                break;
+                
+            case 'processing':
+                statusText = progressMessage; // Keep the useful agent messages like "🤖 Creating recipe..."
+                progressClass = 'status-processing';
+                break;
+                
+            case 'completed':
+                statusText = 'Recipe complete! 🎉';
+                progressClass = 'status-completed';
+                break;
+                
+            case 'failed':
+                statusText = 'Recipe generation failed. Please try again.';
+                progressClass = 'status-failed';
+                break;
+                
+            default:
+                statusText = 'Processing your recipe...';
+                progressClass = 'status-processing';
+        }
+        
+        // Update the UI with clean, simple messaging
+        statusDiv.textContent = statusText;
+        statusDiv.className = `generation-status ${progressClass}`;
+        
+        // Show simple time context only for processing (remove specific estimates)
+        if (status.status === 'processing') {
+            const timeContext = document.getElementById('time-context');
+            if (timeContext) {
+                timeContext.textContent = 'This usually takes 1-2 minutes';
+                timeContext.style.display = 'block';
+            }
+        }
+        
+        // Remove any queue position displays that might exist
+        const queuePositionDiv = document.getElementById('queue-position');
+        if (queuePositionDiv) {
+            queuePositionDiv.style.display = 'none';
+        }
+        
+        // Remove any estimated time displays that might exist  
+        const estimatedTimeDiv = document.getElementById('estimated-time');
+        if (estimatedTimeDiv) {
+            estimatedTimeDiv.style.display = 'none';
+        }
+    }
+
     async pollRecipeStatus(taskId, request, complexity, startTime) {
         const maxPollingTime = 180000; // 3 minutes max
         const pollInterval = 2000; // Poll every 2 seconds
@@ -504,85 +569,6 @@ class RecipeGenerator {
         
         // Start polling immediately
         poll();
-    }
-
-    // Hide/show View Recipes link during generation
-    function toggleViewRecipesLink(hide = false) {
-        const viewRecipesLink = document.querySelector('a[href="#recent-recipes"]');
-        const viewRecipesButton = document.querySelector('button[onclick*="showRecentRecipes"]');
-        const viewRecipesElements = document.querySelectorAll('[data-action="view-recipes"]');
-        
-        // Hide/show any element that links to viewing recipes
-        [viewRecipesLink, viewRecipesButton, ...viewRecipesElements].forEach(element => {
-            if (element) {
-                element.style.display = hide ? 'none' : '';
-            }
-        });
-    }
-
-    function updateProgress(status, startTime) {
-        const progressDiv = document.getElementById('generation-progress');
-        const statusDiv = document.getElementById('generation-status');
-        
-        if (!progressDiv || !statusDiv) return;
-        
-        // Get the progress message (keep the useful agent messages)
-        const progressMessage = status.progress?.message || 'Processing your recipe...';
-        
-        // Simple status updates without queue position or time estimates
-        let statusText = '';
-        let progressClass = '';
-        
-        switch (status.status) {
-            case 'queued':
-                statusText = 'Your recipe is being prepared...';
-                progressClass = 'status-queued';
-                break;
-                
-            case 'processing':
-                statusText = progressMessage; // Keep the useful agent messages like "🤖 Creating recipe..."
-                progressClass = 'status-processing';
-                break;
-                
-            case 'completed':
-                statusText = 'Recipe complete! 🎉';
-                progressClass = 'status-completed';
-                break;
-                
-            case 'failed':
-                statusText = 'Recipe generation failed. Please try again.';
-                progressClass = 'status-failed';
-                break;
-                
-            default:
-                statusText = 'Processing your recipe...';
-                progressClass = 'status-processing';
-        }
-        
-        // Update the UI with clean, simple messaging
-        statusDiv.textContent = statusText;
-        statusDiv.className = `generation-status ${progressClass}`;
-        
-        // Show simple time context only for processing (remove specific estimates)
-        if (status.status === 'processing') {
-            const timeContext = document.getElementById('time-context');
-            if (timeContext) {
-                timeContext.textContent = 'This usually takes 1-2 minutes';
-                timeContext.style.display = 'block';
-            }
-        }
-        
-        // Remove any queue position displays that might exist
-        const queuePositionDiv = document.getElementById('queue-position');
-        if (queuePositionDiv) {
-            queuePositionDiv.style.display = 'none';
-        }
-        
-        // Remove any estimated time displays that might exist  
-        const estimatedTimeDiv = document.getElementById('estimated-time');
-        if (estimatedTimeDiv) {
-            estimatedTimeDiv.style.display = 'none';
-        }
     }
     
     showRecentRecipesSection() {
@@ -1393,6 +1379,22 @@ class RecipeGenerator {
         this.errorMessage.style.display = 'none';
     }
 }
+
+    // Hide/show View Recipes link during generation
+    function toggleViewRecipesLink(hide = false) {
+        const viewRecipesLink = document.querySelector('a[href="#recent-recipes"]');
+        const viewRecipesButton = document.querySelector('button[onclick*="showRecentRecipes"]');
+        const viewRecipesElements = document.querySelectorAll('[data-action="view-recipes"]');
+        
+        // Hide/show any element that links to viewing recipes
+        [viewRecipesLink, viewRecipesButton, ...viewRecipesElements].forEach(element => {
+            if (element) {
+                element.style.display = hide ? 'none' : '';
+            }
+        });
+    }
+
+    
 
 // Initialize the app
 let recipeApp;
