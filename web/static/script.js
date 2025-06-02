@@ -192,10 +192,6 @@ class RecipeGenerator {
         });
     }
     
-    // Add these methods to the RecipeGenerator class in script.js
-
-    // Replace the existing generateRecipe method with this optimized version:
-
     async generateRecipe() {
         const request = this.recipeInput.value.trim();
         const complexityRadio = this.complexityControl.querySelector('input[name="complexity"]:checked');
@@ -219,7 +215,6 @@ class RecipeGenerator {
         const startTime = Date.now();
         
         try {
-            // Queue the recipe generation
             const response = await fetch('/api/generate-recipe', {
                 method: 'POST',
                 headers: {
@@ -233,23 +228,57 @@ class RecipeGenerator {
             
             const data = await response.json();
             
-            if (data.success && data.task_id) {
-                // Start polling for status
-                await this.pollRecipeStatus(data.task_id, request, complexity, startTime);
-            } else {
-                this.trackEvent('recipe_generation_failed', {
+            if (data.success) {
+                const generationTime = (Date.now() - startTime) / 1000;
+                
+                // Track successful recipe generation
+                this.trackEvent('recipe_generated_success', {
+                    recipe_title: data.recipe?.title,
                     recipe_request: request,
                     complexity: complexity,
-                    error: data.error || 'Failed to queue recipe',
+                    generation_time: generationTime,
+                    server_generation_time: data.generation_time,
+                    meal_type: data.recipe?.meal_type,
+                    cuisine_type: data.recipe?.cuisine_type,
+                    ingredients_count: data.recipe?.ingredients?.length || 0,
+                    instructions_count: data.recipe?.instructions?.length || 0,
+                    quality_score: data.quality?.score,
+                    nutrition_method: data.nutrition?.analysis_method,
                     timestamp: new Date().toISOString()
                 });
                 
-                this.showError(data.error || 'Failed to queue recipe generation');
+                this.displayRecipe(data);
+                
+                // Show recent recipes section after first successful generation
+                if (!this.hasGeneratedFirstRecipe) {
+                    this.hasGeneratedFirstRecipe = true;
+                    this.showRecentRecipesSection();
+                    
+                    // Track first recipe milestone
+                    this.trackEvent('first_recipe_generated', {
+                        recipe_title: data.recipe?.title,
+                        complexity: complexity,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+                
+                this.loadRecentRecipes();
+            } else {
+                // Track recipe generation failure
+                this.trackEvent('recipe_generation_failed', {
+                    recipe_request: request,
+                    complexity: complexity,
+                    error: data.error,
+                    generation_time: (Date.now() - startTime) / 1000,
+                    timestamp: new Date().toISOString()
+                });
+                
+                this.showError(data.error || 'Recipe generation failed');
             }
-            
         } catch (error) {
             console.error('Error:', error);
             
+            // Track network/system errors
             this.trackEvent('recipe_generation_error', {
                 recipe_request: request,
                 complexity: complexity,
@@ -260,205 +289,8 @@ class RecipeGenerator {
             
             this.showError('Network error. Please try again.');
         } finally {
-            // Don't hide loading here - will be hidden when polling completes
+            this.hideLoading();
         }
-    }
-
-    async pollRecipeStatus(taskId, request, complexity, startTime) {
-        const maxPollingTime = 180000; // 3 minutes max
-        const pollInterval = 2000; // Poll every 2 seconds
-        let pollCount = 0;
-        
-        const poll = async () => {
-            try {
-                if (Date.now() - startTime > maxPollingTime) {
-                    throw new Error('Recipe generation timed out');
-                }
-                
-                const response = await fetch(`/api/recipe-status/${taskId}`);
-                const status = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(status.error || 'Failed to check status');
-                }
-                
-                // Update progress display
-                this.updateProgress(status, pollCount);
-                
-                switch (status.status) {
-                    case 'completed':
-                        const generationTime = (Date.now() - startTime) / 1000;
-                        
-                        // Track successful completion
-                        this.trackEvent('recipe_generated_success', {
-                            recipe_title: status.result?.recipe?.title,
-                            recipe_request: request,
-                            complexity: complexity,
-                            generation_time: generationTime,
-                            server_generation_time: status.result?.generation_time,
-                            task_id: taskId,
-                            poll_count: pollCount,
-                            timestamp: new Date().toISOString()
-                        });
-                        
-                        this.displayRecipe(status.result);
-                        
-                        // Show recent recipes section after first successful generation
-                        if (!this.hasGeneratedFirstRecipe) {
-                            this.hasGeneratedFirstRecipe = true;
-                            this.showRecentRecipesSection();
-                            
-                            this.trackEvent('first_recipe_generated', {
-                                recipe_title: status.result?.recipe?.title,
-                                complexity: complexity,
-                                timestamp: new Date().toISOString()
-                            });
-                        }
-                        
-                        this.loadRecentRecipes();
-                        this.hideLoading();
-                        break;
-                    
-                    case 'failed':
-                        this.trackEvent('recipe_generation_failed', {
-                            recipe_request: request,
-                            complexity: complexity,
-                            error: status.error,
-                            task_id: taskId,
-                            poll_count: pollCount,
-                            generation_time: (Date.now() - startTime) / 1000,
-                            timestamp: new Date().toISOString()
-                        });
-                        
-                        this.showError(status.error || 'Recipe generation failed');
-                        this.hideLoading();
-                        break;
-                    
-                    case 'processing':
-                    case 'queued':
-                        // Continue polling
-                        pollCount++;
-                        setTimeout(poll, pollInterval);
-                        break;
-                    
-                    default:
-                        throw new Error(`Unknown status: ${status.status}`);
-                }
-                
-            } catch (error) {
-                console.error('Polling error:', error);
-                
-                this.trackEvent('recipe_polling_error', {
-                    recipe_request: request,
-                    complexity: complexity,
-                    task_id: taskId,
-                    error: error.message,
-                    poll_count: pollCount,
-                    timestamp: new Date().toISOString()
-                });
-                
-                this.showError('Error checking recipe status. Please try again.');
-                this.hideLoading();
-            }
-        };
-        
-        // Start polling
-        setTimeout(poll, pollInterval);
-    }
-
-    updateProgress(status, pollCount) {
-        // Update progress based on status
-        let progressMessage = '';
-        let estimatedTime = '';
-        
-        if (status.status === 'queued') {
-            const position = status.queue_position || 1;
-            progressMessage = `⏳ Position ${position} in queue...`;
-            estimatedTime = `Estimated wait: ${position * 30-45} seconds`;
-            
-            // Update progress log
-            const queueItem = document.createElement('div');
-            queueItem.className = 'progress-item in-progress';
-            queueItem.textContent = progressMessage;
-            
-            // Replace or add queue status
-            const existingQueue = this.progressLog.querySelector('.queue-status');
-            if (existingQueue) {
-                existingQueue.textContent = progressMessage;
-            } else {
-                queueItem.classList.add('queue-status');
-                this.progressLog.insertBefore(queueItem, this.progressLog.firstChild);
-            }
-            
-        } else if (status.status === 'processing') {
-            // Mark queue as completed
-            const queueItem = this.progressLog.querySelector('.queue-status');
-            if (queueItem) {
-                queueItem.className = 'progress-item completed';
-                queueItem.textContent = '⏳ Queue processed ✓';
-                queueItem.classList.remove('queue-status');
-            }
-            
-            // Update progress based on step
-            const step = status.progress?.step || 'processing';
-            const message = status.progress?.message || 'Processing recipe...';
-            
-            progressMessage = message;
-            
-            // Show advanced progress if available
-            if (message !== 'Processing recipe...') {
-                // Find or create progress item for this step
-                let stepItem = this.progressLog.querySelector(`[data-step="${step}"]`);
-                if (!stepItem) {
-                    stepItem = document.createElement('div');
-                    stepItem.className = 'progress-item in-progress';
-                    stepItem.setAttribute('data-step', step);
-                    this.progressLog.appendChild(stepItem);
-                }
-                stepItem.textContent = message;
-                
-                // Mark previous steps as completed
-                const allSteps = ['generating', 'researching', 'enhancing', 'analyzing'];
-                const currentIndex = allSteps.indexOf(step);
-                if (currentIndex > 0) {
-                    for (let i = 0; i < currentIndex; i++) {
-                        const prevStep = this.progressLog.querySelector(`[data-step="${allSteps[i]}"]`);
-                        if (prevStep && !prevStep.classList.contains('completed')) {
-                            prevStep.className = 'progress-item completed';
-                            prevStep.textContent += ' ✓';
-                        }
-                    }
-                }
-            }
-            
-            // Estimate remaining time based on step and poll count
-            const stepTimes = {
-                'generating': 15,
-                'researching': 20,
-                'enhancing': 15,
-                'analyzing': 10
-            };
-            const remainingTime = stepTimes[step] || 20;
-            estimatedTime = `Estimated completion: ${remainingTime} seconds`;
-        }
-        
-        // Update loading message if we have specific progress
-        if (progressMessage) {
-            const loadingHeader = this.loading.querySelector('.loading-header h3');
-            if (loadingHeader && progressMessage !== 'Processing recipe...') {
-                loadingHeader.textContent = progressMessage;
-            }
-            
-            if (estimatedTime) {
-                const loadingP = this.loading.querySelector('p');
-                if (loadingP) {
-                    loadingP.textContent = estimatedTime;
-                }
-            }
-        }
-        
-        // Auto-scroll progress log
-        this.progressLog.scrollTop = this.progressLog.scrollHeight;
     }
     
     showRecentRecipesSection() {

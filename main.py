@@ -3,11 +3,11 @@ import os
 import time
 import threading
 import uuid
+import traceback
 from typing import Dict, List
 from queue import Queue, Empty
 from dataclasses import dataclass
 from enum import Enum
-import traceback
 
 class TaskStatus(Enum):
     QUEUED = "queued"
@@ -97,16 +97,21 @@ class SimpleRecipeQueue:
     
     def _start_worker(self):
         def worker():
+            print("🔄 Queue worker thread started")
             while self.running:
                 try:
                     # Check if we can process more tasks
-                    if self.processing_count >= self.max_concurrent:
+                    with self.lock:
+                        current_processing = self.processing_count
+                    
+                    if current_processing >= self.max_concurrent:
                         time.sleep(1)
                         continue
                     
                     # Get next task
                     try:
                         task = self.queue.get(timeout=1)
+                        print(f"🎯 Worker got task: {task.task_id}")
                     except Empty:
                         continue
                     
@@ -120,7 +125,10 @@ class SimpleRecipeQueue:
                     
                 except Exception as e:
                     print(f"❌ Worker error: {str(e)}")
+                    traceback.print_exc()
                     time.sleep(1)
+            
+            print("🔄 Queue worker thread stopped")
         
         self.worker_thread = threading.Thread(target=worker, daemon=True)
         self.worker_thread.start()
@@ -134,14 +142,19 @@ class SimpleRecipeQueue:
                 task.status = TaskStatus.PROCESSING
                 task.progress = {"step": "processing", "message": "Starting recipe generation..."}
             
-            print(f"🎯 Processing task: {task.task_id}")
+            print(f"🎯 Processing task: {task.task_id} for '{task.user_request}'")
             
             # Import here to avoid circular imports
-            from recipe_generator import RecipeGenerator
-            from recipe_enhancer import RecipeEnhancer
-            from web_researcher import WebResearcher
-            from nutrition_analyst import NutritionAnalyst
-            from quality_evaluator import QualityEvaluator
+            try:
+                from recipe_generator import RecipeGenerator
+                from recipe_enhancer import RecipeEnhancer
+                from web_researcher import WebResearcher
+                from nutrition_analyst import NutritionAnalyst
+                from quality_evaluator import QualityEvaluator
+                print(f"✅ Imported all agents for task {task.task_id}")
+            except ImportError as e:
+                print(f"❌ Failed to import agents: {str(e)}")
+                raise e
             
             # Initialize agents (could be cached globally)
             generator = RecipeGenerator()
@@ -149,6 +162,7 @@ class SimpleRecipeQueue:
             researcher = WebResearcher()
             nutrition_analyst = NutritionAnalyst()
             quality_evaluator = QualityEvaluator()
+            print(f"✅ Initialized all agents for task {task.task_id}")
             
             # Run pipeline
             result = self._run_pipeline(
@@ -161,7 +175,7 @@ class SimpleRecipeQueue:
                 task.result = result
                 task.progress = {"step": "completed", "message": "Recipe generation complete!"}
             
-            print(f"✅ Task completed: {task.task_id}")
+            print(f"✅ Task completed: {task.task_id} - {result['recipe']['title']}")
             
         except Exception as e:
             print(f"❌ Task failed: {task.task_id} - {str(e)}")
@@ -175,6 +189,7 @@ class SimpleRecipeQueue:
         finally:
             with self.lock:
                 self.processing_count -= 1
+            print(f"🔄 Processing count after task {task.task_id}: {self.processing_count}")
     
     def _run_pipeline(self, task, generator, enhancer, researcher, nutrition_analyst, quality_evaluator):
         """Run the recipe generation pipeline"""
